@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-base text-muted font-sans text-body antialiased;
+    /* Desing.md: no h-screen — use dvh so mobile browser chrome doesn't clip. */
+    min-height: 100dvh;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply text-ink font-sans font-bold;
+  }
+
+  ::selection {
+    background: rgba(59, 130, 246, 0.32);
+    color: #ffffff;
+  }
+
+  /* Focus ring: 2px accent, offset 2px. Applied globally so nothing ships unfocusable. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-base;
+  }
+
+  /* Respect users who don't want motion. The staggered entrances are decoration. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Glassmorphism surface — the navbar/topbar treatment from Desing.md. */
+  .glass {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .shimmer {
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0.1) 50%,
+      rgba(255, 255, 255, 0.04) 100%
+    );
+    background-size: 200% 100%;
+    @apply animate-shimmer;
+  }
+
+  /* Markdown rendering for wiki pages and chat answers. Hand-rolled rather than
+     pulling the typography plugin, so every rule traces back to Desing.md. */
+  .md {
+    @apply text-muted text-body;
+  }
+  .md > * + * {
+    @apply mt-4;
+  }
+  .md h1 {
+    @apply text-h1 text-ink mt-10 mb-2 first:mt-0;
+  }
+  .md h2 {
+    @apply text-h2 text-ink mt-8 mb-1;
+  }
+  .md h3 {
+    @apply text-ink text-body font-semibold mt-6;
+  }
+  .md p {
+    @apply max-w-prose;
+  }
+  .md ul {
+    @apply list-disc pl-5 space-y-1.5 max-w-prose;
+  }
+  .md ol {
+    @apply list-decimal pl-5 space-y-1.5 max-w-prose;
+  }
+  .md a {
+    @apply text-accent underline underline-offset-4 decoration-accent/40 hover:decoration-accent transition-colors;
+  }
+  .md code {
+    @apply font-mono text-small text-ink bg-white/5 px-1.5 py-0.5 rounded;
+  }
+  .md pre {
+    @apply font-mono text-small bg-white/5 border border-line rounded p-4 overflow-x-auto;
+  }
+  .md pre code {
+    @apply bg-transparent p-0;
+  }
+  .md blockquote {
+    @apply border-l-2 border-accent/50 pl-4 italic;
+  }
+  .md table {
+    @apply w-full text-small border-collapse;
+  }
+  .md th {
+    @apply text-ink text-left font-medium border-b border-line py-2 pr-4;
+  }
+  .md td {
+    @apply border-b border-line/60 py-2 pr-4 align-top;
+  }
+  .md hr {
+    @apply border-line my-8;
+  }
+}

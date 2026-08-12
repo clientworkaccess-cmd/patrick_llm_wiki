@@ -1,0 +1,31 @@
+# /etc/systemd/system/dashboard.service
+#
+# systemctl daemon-reload && systemctl enable --now dashboard
+
+[Unit]
+Description=Knowledge Graph dashboard
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/dashboard
+EnvironmentFile=/opt/dashboard/.env
+
+# ONE process. The per-cluster busy lock is in-process, so a second instance or
+# any clustering silently breaks write serialisation — two ingests would both
+# rewrite index.md and one would lose. Do not add a process manager that forks.
+ExecStart=/usr/bin/node .next/standalone/server.js
+
+# Bind loopback only. Caddy is the only thing that should reach this, and
+# `hermes dashboard` is never exposed at all — SSH tunnel for ops.
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=3000
+Environment=NODE_ENV=production
+
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

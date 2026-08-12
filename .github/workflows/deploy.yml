@@ -1,0 +1,30 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # so you can redeploy without an empty commit
+
+# Two pushes in quick succession must not build on the box at the same time —
+# the second would restart the service mid-build of the first.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        # The build happens on the VPS, not here. It keeps the pipeline to one
+        # step and means CI never needs the production env file. The cost is
+        # build load on the same box that serves the app — acceptable while
+        # this is one small client, worth revisiting if builds get slow.
+        run: |
+          install -m 700 -d ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/id_ed25519 \
+              "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+              'bash -lc "/opt/dashboard/deploy/deploy.sh"'
