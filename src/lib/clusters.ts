@@ -96,6 +96,51 @@ export async function createCluster(input: {
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, 'SCHEMA.md'), renderSchema(input), 'utf8');
 
+  // index.md and log.md are written here, not left to the first ingest.
+  //
+  // Two reasons. A cluster *is* a directory containing index.md — that is the
+  // readdir filter in listClusters() — so without it a newly created cluster is
+  // invisible in the UI, and you cannot upload to something you cannot see.
+  // And the llm-wiki skill's own "Initializing a New Wiki" procedure writes
+  // both files at init; its orientation step then reads them at the start of
+  // every session. Handing the agent an empty scaffold matches what it expects.
+  const today = new Date().toISOString().slice(0, 10);
+
+  await fs.writeFile(
+    path.join(dir, 'index.md'),
+    `# Wiki Index
+
+> Content catalog. Every wiki page listed under its type with a one-line summary.
+> Read this first to find relevant pages for any query.
+> Last updated: ${today} | Total pages: 0
+
+## Entities
+
+## Concepts
+
+## Comparisons
+
+## Queries
+`,
+    'utf8',
+  );
+
+  await fs.writeFile(
+    path.join(dir, 'log.md'),
+    `# Wiki Log
+
+> Chronological record of all wiki actions. Append-only.
+> Format: \`## [YYYY-MM-DD] action | subject\`
+> Actions: ingest, update, query, lint, create, archive, delete
+> When this file exceeds 500 entries, rotate: rename to log-YYYY.md, start fresh.
+
+## [${today}] create | Cluster initialized
+- Domain: ${input.scope.trim().split('\n')[0]}
+- Structure created with SCHEMA.md, index.md, log.md
+`,
+    'utf8',
+  );
+
   // Per-cluster git, never at WIKI_ROOT: a root-level repo collapses every
   // cluster into one shared history. Failure here is not fatal — the cluster
   // works, it just has no rollback until someone fixes git.

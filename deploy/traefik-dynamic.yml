@@ -27,7 +27,8 @@ http:
       loadBalancer:
         servers:
           # Next binds loopback only. Traefik is the sole route in from outside.
-          - url: "http://127.0.0.1:3000"
+          # 3002 — port 3000 belongs to another app on this box.
+          - url: "http://127.0.0.1:3002"
 
         responseForwarding:
           # Traefik already flushes recognised streaming responses immediately

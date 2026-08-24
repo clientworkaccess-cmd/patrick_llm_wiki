@@ -10,6 +10,9 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/dashboard}"
 SERVICE="${SERVICE:-dashboard}"
+# Must match Environment=PORT in dashboard.service and the Traefik service URL.
+# 3002 because another app on this box owns 3000.
+PORT="${PORT:-3002}"
 
 cd "$APP_DIR"
 
@@ -34,7 +37,7 @@ systemctl restart "$SERVICE"
 
 echo "==> Waiting for it to answer"
 for i in $(seq 1 30); do
-	if curl -fsS -o /dev/null http://127.0.0.1:3000/; then
+	if curl -fsS -o /dev/null "http://127.0.0.1:$PORT/"; then
 		echo "==> Up"
 		exit 0
 	fi

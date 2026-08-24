@@ -152,19 +152,52 @@ Every page in this cluster.
 }
 
 async function answer() {
-  const question = prompt.match(/"([^"]+)"/)?.[1] ?? 'your question';
+  const clusterName = (path.basename(WIKI_PATH) ?? '').toLowerCase();
 
-  for (const chunk of [
-    `Past the standard window, a refund does not go through automatically —`,
-    `the Returns Portal will not process it. It routes to manager approval instead.`,
-    ``,
-    `The Warehouse Team still has to confirm the item came back and is resalable`,
-    `before anything is paid out, the same as any other return.`,
-    ``,
-    `(Asked: ${question})`,
-    ``,
-    `SOURCES: [[Refund Policy]], [[Returns Portal]]`,
-  ]) {
+  let chunks = [];
+
+  if (clusterName === 'operations') {
+    chunks = [
+      `The **Operations** cluster covers how customer orders are fulfilled, inspected, and returned.`,
+      ``,
+      `Key operational areas:`,
+      `- **Warehouse Management**: Order picking, packing, dispatching, and return item inspections managed by the [[Warehouse Team]].`,
+      `- **Returns & Exchanges**: Tracking and processing return requests automatically via the [[Returns Portal]].`,
+      `- **Policies & Escalations**: Managing window limits, damaged items, and manager overrides per [[Refund Policy]].`,
+      ``,
+      `SOURCES: [[Warehouse Team]], [[Returns Portal]], [[Refund Policy]]`,
+    ];
+  } else if (clusterName === 'finance') {
+    chunks = [
+      `The **Finance** cluster covers financial planning, departmental budgeting, expense tracking, and audit compliance.`,
+      ``,
+      `Key financial areas:`,
+      `- **Financial Governance**: Budget distributions, tax compliance, and accounting supervised by the [[Finance Team]].`,
+      `- **Audit & Tracking**: Recording transaction ledgers and financial variance reports inside the [[Audit Portal]].`,
+      `- **Budgeting Framework**: Guidelines for annual financial planning and expense approvals in [[Budgeting Guidelines]].`,
+      ``,
+      `SOURCES: [[Finance Team]], [[Audit Portal]], [[Budgeting Guidelines]]`,
+    ];
+  } else if (clusterName === 'marketing') {
+    chunks = [
+      `The **Marketing** cluster covers brand positioning, acquisition campaign strategy, media asset management, and growth analytics.`,
+      ``,
+      `Key marketing areas:`,
+      `- **Acquisition & Growth**: Paid media campaigns, SEO, and user growth strategy driven by the [[Growth Team]].`,
+      `- **Brand Collateral**: Storing digital assets, design templates, and copy guidelines within the [[Content Hub]].`,
+      `- **Campaign Strategy**: Blueprint for product launches, promotional pushes, and retargeting in [[Campaign Strategy]].`,
+      ``,
+      `SOURCES: [[Growth Team]], [[Content Hub]], [[Campaign Strategy]]`,
+    ];
+  } else {
+    chunks = [
+      `This cluster covers information, entities, and concepts configured for ${clusterName}.`,
+      ``,
+      `SOURCES: [[Index]]`,
+    ];
+  }
+
+  for (const chunk of chunks) {
     await say(chunk, 220);
   }
 }

@@ -58,8 +58,8 @@ export default async function Home() {
               </h2>
               <Stagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {clusters.map((cluster) => (
-                  <StaggerItem key={cluster.name}>
-                    <Lift>
+                  <StaggerItem key={cluster.name} className="h-full">
+                    <Lift className="h-full">
                       <Link href={`/c/${cluster.name}`} className="block h-full">
                         <Card className="flex h-full flex-col p-5 transition-colors hover:border-accent/40">
                           <h3 className="text-h2 text-ink">{cluster.title}</h3>

@@ -68,7 +68,8 @@ Browser
   │  HTTPS
 Traefik :443          TLS, one shared password, no buffering middleware
   │  HTTP (loopback)
-Next.js :3000         single process — see below
+Next.js :3002         single process — see below
+                      (3002 not 3000: another app owns 3000 on this box)
   │  spawn(), stdout pipe — not a network call
 hermes                env: WIKI_PATH=/var/llm_wiki/<cluster>
   │  filesystem

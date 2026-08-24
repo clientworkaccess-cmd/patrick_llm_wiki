@@ -171,7 +171,13 @@ export function ChatPanel({ cluster, hasPages }: { cluster: string; hasPages: bo
                 void ask();
               }
             }}
-            placeholder="How do we handle a refund past 30 days?"
+            placeholder={
+              cluster.toLowerCase() === 'finance'
+                ? 'Ask what the Finance cluster is about...'
+                : cluster.toLowerCase() === 'marketing'
+                ? 'Ask what the Marketing cluster is about...'
+                : 'Ask what the Operations cluster is about...'
+            }
             className="max-h-40 flex-1 resize-none bg-transparent px-3 py-2.5 text-body text-ink placeholder:text-muted/50 focus:outline-none"
           />
           {busy ? (
