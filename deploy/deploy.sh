@@ -24,7 +24,14 @@ echo "==> Installing"
 # `npm ci` not `npm install`: it installs exactly the lockfile and fails loudly
 # if package.json and the lock have drifted, rather than quietly resolving to
 # something that was never tested.
-npm ci --omit=dev --ignore-scripts=false
+#
+# NOT --omit=dev. We build on this box, and the build needs typescript,
+# tailwindcss and postcss, all of which are devDependencies. Without typescript
+# Next cannot read the `paths` mapping out of tsconfig.json, so every `@/…`
+# import fails to resolve and the error reads as missing source files rather
+# than a missing compiler. --omit=dev only belongs here if the build artifact
+# is produced elsewhere and shipped in.
+npm ci --ignore-scripts=false
 
 echo "==> Building"
 # Needs outbound network for the three Google fonts. When the egress firewall
