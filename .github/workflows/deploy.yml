@@ -33,4 +33,4 @@ jobs:
             ssh -o StrictHostKeyChecking=no \
                 -o UserKnownHostsFile=/dev/null \
                 "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-                'bash -lc "/opt/dashboard/deploy/deploy.sh"'
+                'bash -lc "bash /opt/dashboard/deploy/deploy.sh"'
