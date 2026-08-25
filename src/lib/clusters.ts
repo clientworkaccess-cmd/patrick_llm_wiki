@@ -6,6 +6,7 @@ import {
   DASHBOARD_DIR,
   HttpError,
   JOBS_DIR,
+  ORIGINALS_DIR,
   STAGING_DIR,
   TRANSCRIPTS_DIR,
   WIKI_ROOT,
@@ -25,7 +26,7 @@ export interface Cluster {
 
 /** Create the dashboard-owned directories. Safe to call on every boot. */
 export async function ensureDashboardDirs(): Promise<void> {
-  for (const dir of [WIKI_ROOT, DASHBOARD_DIR, JOBS_DIR, STAGING_DIR, TRANSCRIPTS_DIR]) {
+  for (const dir of [WIKI_ROOT, DASHBOARD_DIR, JOBS_DIR, STAGING_DIR, ORIGINALS_DIR, TRANSCRIPTS_DIR]) {
     await fs.mkdir(dir, { recursive: true });
   }
 }

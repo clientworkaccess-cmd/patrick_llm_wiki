@@ -94,7 +94,7 @@ export function subscribe(id: string, fn: (job: Job) => void): () => void {
 export async function startIngest(opts: {
   cluster: string;
   filename: string;
-  stagedPath: string;
+  rawPath: string;
 }): Promise<Job> {
   const held = busy.get(opts.cluster);
   if (held) {
@@ -121,26 +121,30 @@ export async function startIngest(opts: {
   await persist(job);
 
   // Deliberately not awaited. The HTTP response goes out now.
-  void ingest(job, opts.stagedPath);
+  void ingest(job, opts.rawPath);
 
   return job;
 }
 
-async function ingest(job: Job, stagedPath: string): Promise<void> {
+async function ingest(job: Job, rawPath: string): Promise<void> {
   const before = await snapshot(job.cluster);
 
   const prompt = [
-    `A new source document has been placed at: ${stagedPath}`,
+    `A new pre-formatted source document has been saved directly to: ${rawPath}`,
     ``,
-    `Read SCHEMA.md first — it defines this cluster's scope, naming rules, and the parsing`,
-    `tools available to you. Convert the document with markitdown, falling back to OCR only`,
-    `if it has no text layer.`,
+    `Read SCHEMA.md first — it defines this cluster's scope, entity tracking goals, and naming rules.`,
     ``,
-    `Then file it into the wiki: move the source into raw/, create or update the entity and`,
-    `concept pages it warrants, link them with [[wikilinks]], update index.md, and append an`,
-    `entry to log.md describing what changed.`,
+    `Do NOT parse or convert ${rawPath} — it is already clean Markdown with valid SHA256 frontmatter inside raw/.`,
     ``,
-    `Prefer updating an existing page over creating a near-duplicate.`,
+    `Perform file ingestion and graph synthesis:`,
+    `1. Read ${rawPath} carefully.`,
+    `2. Extract key entities (people, tools, systems, vendors) and concepts (ideas, workflows, procedures).`,
+    `3. Check existing files in entities/ and concepts/ — prefer updating an existing page over creating a near-duplicate.`,
+    `4. Maintain at least two [[wikilinks]] per page to cross-link pages in this cluster.`,
+    `5. Update index.md catalog with a one-line summary for every new or modified page.`,
+    `6. Append a single entry to log.md in the format: ## [YYYY-MM-DD] ingest | ${job.filename}`,
+    ``,
+    `Synthesize knowledge cleanly into the wiki structure.`,
   ].join('\n');
 
   const run = runHermes({

@@ -28,6 +28,7 @@ export const HERMES_ARGS = (process.env.HERMES_ARGS ?? 'scripts/fake-hermes.mjs'
 export const DASHBOARD_DIR = path.join(WIKI_ROOT, '.dashboard');
 export const JOBS_DIR = path.join(DASHBOARD_DIR, 'jobs');
 export const STAGING_DIR = path.join(DASHBOARD_DIR, 'staging');
+export const ORIGINALS_DIR = path.join(DASHBOARD_DIR, 'originals');
 export const TRANSCRIPTS_DIR = path.join(DASHBOARD_DIR, 'transcripts');
 
 /** Hard ceiling on a single ingest before we give up and mark the job failed. */

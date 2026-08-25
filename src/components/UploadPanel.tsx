@@ -2,9 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { UploadCloud, FileUp, TriangleAlert, RotateCcw, Sparkles } from 'lucide-react';
+import {
+  UploadCloud,
+  FileUp,
+  TriangleAlert,
+  RotateCcw,
+  Sparkles,
+  ClipboardPaste,
+  FileText,
+} from 'lucide-react';
 import { Button, Card, Skeleton, Badge } from '@/components/ui';
 import { Reveal } from '@/components/Reveal';
+import { parseDocx, parsePdf, parseTxt } from '@/lib/parser';
 
 interface Job {
   id: string;
@@ -15,13 +24,12 @@ interface Job {
   error: string | null;
 }
 
+type TabMode = 'file' | 'paste';
+
 /**
- * Upload → job id → SSE.
- *
- * The POST returns as soon as the file is on disk; the ingest keeps running
- * behind it. The job id is kept in localStorage so a refresh mid-ingest
- * reattaches to the same run instead of losing it — which is the whole reason
- * the job record exists.
+ * Upload & Paste Panel.
+ * Performs client-side pre-parsing (.docx -> mammoth+turndown, .pdf -> pdfjs with OCR guard, .txt/paste -> native text)
+ * and submits formatted Markdown directly to /api/upload for saving into raw/.
  */
 export function UploadPanel({ cluster }: { cluster: string }) {
   const router = useRouter();
@@ -29,6 +37,14 @@ export function UploadPanel({ cluster }: { cluster: string }) {
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [sending, setSending] = useState(false);
+  const [parsingMsg, setParsingMsg] = useState<string | null>(null);
+
+  const [tab, setTab] = useState<TabMode>('file');
+
+  // Pasted text state
+  const [pasteTitle, setPasteTitle] = useState('');
+  const [pasteContent, setPasteContent] = useState('');
+
   const inputRef = useRef<HTMLInputElement>(null);
   const storageKey = `ingest:${cluster}`;
 
@@ -42,7 +58,6 @@ export function UploadPanel({ cluster }: { cluster: string }) {
         if (next.status !== 'running') {
           localStorage.removeItem(storageKey);
           source.close();
-          // Pull the freshly written pages into the sidebar and index.
           router.refresh();
         }
       });
@@ -53,29 +68,100 @@ export function UploadPanel({ cluster }: { cluster: string }) {
     [router, storageKey],
   );
 
-  // Reattach after a refresh.
   useEffect(() => {
     const pending = localStorage.getItem(storageKey);
     if (pending) return attach(pending);
   }, [attach, storageKey]);
 
-  async function send(file: File) {
+  async function handleFileSubmit(file: File) {
     setError(null);
+    setParsingMsg('Extracting document text...');
     setSending(true);
+
     try {
+      let extractedText = '';
+      const nameLower = file.name.toLowerCase();
+
+      if (nameLower.endsWith('.docx')) {
+        extractedText = await parseDocx(file);
+      } else if (nameLower.endsWith('.pdf')) {
+        const res = await parsePdf(file);
+        extractedText = res.text;
+      } else {
+        extractedText = await parseTxt(file);
+      }
+
+      if (!extractedText.trim()) {
+        throw new Error('No text could be extracted from this document.');
+      }
+
+      setParsingMsg('Sending file to server...');
+
       const body = new FormData();
       body.append('cluster', cluster);
-      body.append('file', file);
+      body.append('parsedText', extractedText);
+      body.append('filename', file.name);
+      body.append('file', file); // Save original binary in .dashboard/originals/
 
       const res = await fetch('/api/upload', { method: 'POST', body });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Upload failed');
 
       localStorage.setItem(storageKey, data.jobId);
-      setJob({ id: data.jobId, status: 'running', filename: file.name, lines: [], diff: null, error: null });
+      setJob({
+        id: data.jobId,
+        status: 'running',
+        filename: file.name,
+        lines: [],
+        diff: null,
+        error: null,
+      });
       attach(data.jobId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed');
+      setError(err instanceof Error ? err.message : 'File parsing/upload failed');
+    } finally {
+      setSending(false);
+      setParsingMsg(null);
+    }
+  }
+
+  async function handlePasteSubmit() {
+    if (!pasteContent.trim()) {
+      setError('Please paste or type text before submitting.');
+      return;
+    }
+
+    setError(null);
+    setSending(true);
+
+    try {
+      const filename = pasteTitle.trim()
+        ? `${pasteTitle.trim().replace(/[^\w.\- ]+/g, '_')}.md`
+        : `pasted_note_${new Date().toISOString().slice(0, 10)}.md`;
+
+      const body = new FormData();
+      body.append('cluster', cluster);
+      body.append('parsedText', pasteContent.trim());
+      body.append('filename', filename);
+
+      const res = await fetch('/api/upload', { method: 'POST', body });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Submission failed');
+
+      localStorage.setItem(storageKey, data.jobId);
+      setJob({
+        id: data.jobId,
+        status: 'running',
+        filename,
+        lines: [],
+        diff: null,
+        error: null,
+      });
+      attach(data.jobId);
+      setPasteTitle('');
+      setPasteContent('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Submission failed');
     } finally {
       setSending(false);
     }
@@ -98,8 +184,7 @@ export function UploadPanel({ cluster }: { cluster: string }) {
             </h3>
             <p className="mt-1.5 text-small">{job.error ?? 'The agent stopped before finishing.'}</p>
             <p className="mt-1.5 text-small text-muted/70">
-              Nothing was half-written that you need to clean up — the wiki is under version
-              control and this run left no entry in the log.
+              Nothing was half-written — the wiki is under version control.
             </p>
             <Button variant="ghost" className="mt-4" onClick={() => setJob(null)}>
               <RotateCcw className="h-4 w-4" strokeWidth={2} />
@@ -116,13 +201,14 @@ export function UploadPanel({ cluster }: { cluster: string }) {
       <Card className="p-5">
         <div className="flex items-center gap-2.5">
           <Sparkles className="h-4 w-4 text-accent" strokeWidth={1.75} />
-          <span className="text-ink font-medium">Reading {job?.filename ?? 'your file'}</span>
+          <span className="text-ink font-medium">
+            {parsingMsg ?? `Ingesting ${job?.filename ?? 'your content'}...`}
+          </span>
         </div>
         <p className="mt-1.5 text-small">
-          This takes a few minutes. You can leave this page — it keeps running.
+          Synthesizing into wiki entities & concepts. You can leave this page — it keeps running.
         </p>
 
-        {/* Shimmer, not a spinner. */}
         <div className="mt-5 space-y-2">
           {job && job.lines.length > 0 ? (
             <div className="max-h-48 overflow-y-auto rounded border border-line bg-white/[0.02] p-3">
@@ -145,59 +231,120 @@ export function UploadPanel({ cluster }: { cluster: string }) {
   }
 
   return (
-    <Card
-      className={`p-6 transition-colors ${dragging ? 'border-accent bg-accent/5' : ''}`}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragging(true);
-      }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragging(false);
-        const file = e.dataTransfer.files?.[0];
-        if (file) void send(file);
-      }}
-    >
-      <div className="flex flex-col items-center text-center">
-        <span className="mb-3.5 flex h-11 w-11 items-center justify-center rounded-lg border border-line bg-white/[0.03]">
-          <UploadCloud className="h-5 w-5 text-accent" strokeWidth={1.75} />
-        </span>
-        <h3 className="text-ink font-semibold">Add a document</h3>
-        <p className="mt-1.5 max-w-prose text-small">
-          Drop a file here, or choose one. PDF, Word, Excel, PowerPoint, or plain text — you do
-          not need to organise it first.
-        </p>
+    <Card className="p-5">
+      {/* Header controls & Tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+        <div className="flex items-center gap-1 rounded-lg border border-line bg-white/[0.02] p-1">
+          <button
+            type="button"
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              tab === 'file' ? 'bg-accent text-white' : 'text-muted hover:text-ink'
+            }`}
+            onClick={() => {
+              setTab('file');
+              setError(null);
+            }}
+          >
+            <UploadCloud className="h-3.5 w-3.5" />
+            Upload File
+          </button>
+          <button
+            type="button"
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              tab === 'paste' ? 'bg-accent text-white' : 'text-muted hover:text-ink'
+            }`}
+            onClick={() => {
+              setTab('paste');
+              setError(null);
+            }}
+          >
+            <ClipboardPaste className="h-3.5 w-3.5" />
+            Paste Text
+          </button>
+        </div>
 
-        <input
-          ref={inputRef}
-          type="file"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void send(file);
-            e.target.value = '';
-          }}
-        />
-        <Button className="mt-5" onClick={() => inputRef.current?.click()}>
-          <FileUp className="h-4 w-4" strokeWidth={2} />
-          Choose a file
-        </Button>
-
-        {error && <p className="mt-3.5 text-small text-danger">{error}</p>}
+        <span className="text-xs text-muted">Files land directly in <code className="text-accent font-mono">raw/</code></span>
       </div>
+
+      {tab === 'file' ? (
+        <div
+          className={`mt-4 rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+            dragging ? 'border-accent bg-accent/5' : 'border-line'
+          }`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) void handleFileSubmit(file);
+          }}
+        >
+          <div className="flex flex-col items-center">
+            <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-white/[0.03]">
+              <FileText className="h-5 w-5 text-accent" strokeWidth={1.75} />
+            </span>
+            <h3 className="text-ink font-semibold">Upload Document</h3>
+            <p className="mt-1 max-w-prose text-small text-muted">
+              Drop a Word (.docx), PDF (.pdf), or Plain Text (.txt, .md) file here.
+            </p>
+
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".docx,.pdf,.txt,.md"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleFileSubmit(file);
+                e.target.value = '';
+              }}
+            />
+            <Button className="mt-4" onClick={() => inputRef.current?.click()}>
+              <FileUp className="h-4 w-4" strokeWidth={2} />
+              Choose File
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted">
+              Document Title / Reference (Optional):
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Q3 Strategic Plan Notes"
+              value={pasteTitle}
+              onChange={(e) => setPasteTitle(e.target.value)}
+              className="w-full rounded border border-line bg-background px-3 py-2 text-small text-ink focus:border-accent focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted">Content / Text:</label>
+            <textarea
+              rows={6}
+              placeholder="Paste raw text or Markdown here..."
+              value={pasteContent}
+              onChange={(e) => setPasteContent(e.target.value)}
+              className="w-full rounded border border-line bg-background p-3 text-small text-ink focus:border-accent focus:outline-none"
+            />
+          </div>
+          <Button onClick={handlePasteSubmit} disabled={!pasteContent.trim()}>
+            <Sparkles className="h-4 w-4" strokeWidth={2} />
+            Ingest Text
+          </Button>
+        </div>
+      )}
+
+      {error && <p className="mt-3.5 text-small text-danger">{error}</p>}
     </Card>
   );
 }
 
-/**
- * The payoff screen. This is the moment the product sells itself — not the
- * chat, but the fact that a pile of documents visibly became something with a
- * shape.
- *
- * The numbers are computed from what is actually on disk before and after, not
- * from the agent's own summary of what it did.
- */
 function IngestDiff({ job, onDismiss }: { job: Job; onDismiss: () => void }) {
   const diff = job.diff!;
   const stats = [
