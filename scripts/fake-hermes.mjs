@@ -27,6 +27,15 @@ const usageFile = process.argv.includes('--usage-file')
   : null;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// `--skip index,log` makes the fake misbehave on purpose, so the post-ingest
+// check can be exercised locally. A well-behaved fake can never produce a
+// "needs attention" screen, which would leave that path untested. It is an
+// argument rather than an env var because the dashboard deliberately strips
+// the agent's environment down to five variables (see lib/hermes.ts); pass it
+// through HERMES_ARGS, e.g. HERMES_ARGS="scripts/fake-hermes.mjs --skip index".
+const skipArg = process.argv.includes('--skip') ? process.argv[process.argv.indexOf('--skip') + 1] ?? '' : '';
+const SKIP = new Set(skipArg.split(',').map((s) => s.trim()).filter(Boolean));
 const say = async (line, pause = 700) => {
   process.stdout.write(line + '\n');
   await sleep(pause);
@@ -37,7 +46,10 @@ if (!WIKI_PATH) {
   process.exit(1);
 }
 
-const isIngest = /source document has been placed/i.test(prompt);
+// Matches both the original wording and the one the upload route uses since the
+// 2026-08-25 change ("saved directly to"). With only the old phrase every local
+// ingest was silently handled as a chat answer and wrote nothing.
+const isIngest = /source document has been (placed|saved directly to)/i.test(prompt);
 
 if (isIngest) {
   await ingest();
@@ -46,7 +58,7 @@ if (isIngest) {
 }
 
 async function ingest() {
-  const source = prompt.match(/placed at:\s*(.+)/)?.[1]?.trim() ?? 'the uploaded file';
+  const source = prompt.match(/(?:placed at|saved directly to):\s*(\S+)/)?.[1]?.trim() ?? 'the uploaded file';
   const label = path.basename(source).replace(/^[0-9a-f-]{36}__/, '');
 
   await say('Reading SCHEMA.md to understand this cluster.');
@@ -118,6 +130,7 @@ is in resalable condition before the refund is released.
 ${label} (filed ${new Date().toISOString()})
 `);
 
+  if (!SKIP.has('index')) {
   await say('Updating index.md');
   await write('index.md', `# Index
 
@@ -130,7 +143,9 @@ Every page in this cluster.
 ## Concepts
 - [[Refund Policy]] — how refunds are assessed, approved and paid
 `);
+  }
 
+  if (!SKIP.has('log')) {
   await say('Appending to log.md');
   const logPath = path.join(WIKI_PATH, 'log.md');
   const existing = await fs.readFile(logPath, 'utf8').catch(() => '# Log\n');
@@ -139,6 +154,7 @@ Every page in this cluster.
     `${existing.trimEnd()}\n\n- ${stamp} — Ingested \`${label}\`. 2 new pages, 1 updated, 5 new connections.\n`,
     'utf8',
   );
+  }
 
   if (usageFile) {
     await fs.writeFile(
