@@ -15,12 +15,20 @@ import { Button, Card, Skeleton, Badge } from '@/components/ui';
 import { Reveal } from '@/components/Reveal';
 import { parseDocx, parsePdf, parseTxt } from '@/lib/parser';
 
+interface Finding {
+  code: string;
+  severity: 'error' | 'warning';
+  detail: string;
+}
+
 interface Job {
   id: string;
-  status: 'running' | 'done' | 'failed' | 'interrupted';
+  status: 'running' | 'done' | 'attention' | 'failed' | 'interrupted';
   filename: string;
+  startedAt?: string;
   lines: string[];
   diff: { newPages: number; updatedPages: number; newConnections: number } | null;
+  lint: { ok: boolean; findings: Finding[] } | null;
   error: string | null;
 }
 
@@ -114,6 +122,7 @@ export function UploadPanel({ cluster }: { cluster: string }) {
         filename: file.name,
         lines: [],
         diff: null,
+        lint: null,
         error: null,
       });
       attach(data.jobId);
@@ -155,6 +164,7 @@ export function UploadPanel({ cluster }: { cluster: string }) {
         filename,
         lines: [],
         diff: null,
+        lint: null,
         error: null,
       });
       attach(data.jobId);
@@ -169,7 +179,7 @@ export function UploadPanel({ cluster }: { cluster: string }) {
 
   const running = job?.status === 'running' || sending;
 
-  if (job && job.status === 'done' && job.diff) {
+  if (job && (job.status === 'done' || job.status === 'attention') && job.diff) {
     return <IngestDiff job={job} onDismiss={() => setJob(null)} />;
   }
 
@@ -202,11 +212,13 @@ export function UploadPanel({ cluster }: { cluster: string }) {
         <div className="flex items-center gap-2.5">
           <Sparkles className="h-4 w-4 text-accent" strokeWidth={1.75} />
           <span className="text-ink font-medium">
-            {parsingMsg ?? `Ingesting ${job?.filename ?? 'your content'}...`}
+            {parsingMsg ?? `Reading ${job?.filename ?? 'your content'}`}
           </span>
+          {job?.startedAt && <Elapsed since={job.startedAt} />}
         </div>
         <p className="mt-1.5 text-small">
-          Synthesizing into wiki entities & concepts. You can leave this page — it keeps running.
+          The agent reads the whole document, then writes and links the pages in one pass. It reports
+          when it is finished, not as it goes. You can leave this page; it keeps running.
         </p>
 
         <div className="mt-5 space-y-2">
@@ -345,8 +357,26 @@ export function UploadPanel({ cluster }: { cluster: string }) {
   );
 }
 
+/** "working, N min" — the honest running state for an agent that answers in one block. */
+function Elapsed({ since }: { since: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const s = Math.max(0, Math.floor((now - new Date(since).getTime()) / 1000));
+  const label = s < 60 ? `${s}s` : `${Math.floor(s / 60)} min ${s % 60}s`;
+  return (
+    <span className="ml-auto font-mono text-[0.75rem] tabular-nums text-muted/70" aria-live="off">
+      {label}
+    </span>
+  );
+}
+
 function IngestDiff({ job, onDismiss }: { job: Job; onDismiss: () => void }) {
   const diff = job.diff!;
+  const findings = job.lint?.findings ?? [];
+  const attention = job.status === 'attention';
   const stats = [
     { value: diff.newPages, label: diff.newPages === 1 ? 'new page' : 'new pages' },
     { value: diff.updatedPages, label: diff.updatedPages === 1 ? 'page updated' : 'pages updated' },
@@ -356,9 +386,13 @@ function IngestDiff({ job, onDismiss }: { job: Job; onDismiss: () => void }) {
   return (
     <Reveal>
       <Card className="border-accent/30 p-6">
-        <Badge tone="success">Filed</Badge>
+        <Badge tone={attention ? 'danger' : 'success'}>{attention ? 'Needs attention' : 'Filed'}</Badge>
         <h3 className="mt-3.5 text-h2 text-ink">
-          {job.filename} is now <span className="font-serif italic text-accent">part of the wiki</span>
+          {attention ? (
+            <>{job.filename} was read, but the record is <span className="font-serif italic text-danger">not in order</span></>
+          ) : (
+            <>{job.filename} is now <span className="font-serif italic text-accent">part of the wiki</span></>
+          )}
         </h3>
 
         <div className="mt-6 grid grid-cols-3 gap-3">
@@ -370,13 +404,27 @@ function IngestDiff({ job, onDismiss }: { job: Job; onDismiss: () => void }) {
           ))}
         </div>
 
-        <p className="mt-5 max-w-prose text-small">
-          Nothing was duplicated — where this document covered ground the wiki already had, the
-          existing pages were updated instead.
-        </p>
+        {findings.length > 0 ? (
+          <ul className="mt-5 space-y-2" aria-label="Checks on what was written">
+            {findings.map((f, i) => (
+              <li key={i} className="flex items-start gap-2 text-small">
+                <TriangleAlert
+                  className={`mt-0.5 h-4 w-4 shrink-0 ${f.severity === 'error' ? 'text-danger' : 'text-muted/70'}`}
+                  strokeWidth={1.75}
+                />
+                <span className={f.severity === 'error' ? 'text-ink' : 'text-muted'}>{f.detail}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-5 max-w-prose text-small">
+            Checked against the disk: the index and the log were updated, every new page is linked,
+            and every link points at a page that exists.
+          </p>
+        )}
 
         <Button variant="ghost" className="mt-5" onClick={onDismiss}>
-          Add another
+          {attention ? 'Add another anyway' : 'Add another'}
         </Button>
       </Card>
     </Reveal>

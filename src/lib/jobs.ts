@@ -5,6 +5,7 @@ import { HttpError, JOBS_DIR, INGEST_TIMEOUT_MS, clusterPath } from './config';
 import { ensureDashboardDirs } from './clusters';
 import { runHermes } from './hermes';
 import { diffAgainst, snapshot, type IngestDiff } from './wiki';
+import { beforeIngest, lintAfterIngest, type LintResult } from './lint';
 
 /**
  * Ingest job state.
@@ -25,7 +26,7 @@ import { diffAgainst, snapshot, type IngestDiff } from './wiki';
  * wall-clock from the spike.
  */
 
-export type JobStatus = 'running' | 'done' | 'failed' | 'interrupted';
+export type JobStatus = 'running' | 'done' | 'attention' | 'failed' | 'interrupted';
 
 export interface Job {
   id: string;
@@ -36,6 +37,8 @@ export interface Job {
   endedAt: string | null;
   lines: string[];
   diff: IngestDiff | null;
+  /** What the post-ingest check found on disk. Null until the agent finishes. */
+  lint: LintResult | null;
   error: string | null;
 }
 
@@ -113,6 +116,7 @@ export async function startIngest(opts: {
     endedAt: null,
     lines: [],
     diff: null,
+    lint: null,
     error: null,
   };
 
@@ -128,6 +132,7 @@ export async function startIngest(opts: {
 
 async function ingest(job: Job, rawPath: string): Promise<void> {
   const before = await snapshot(job.cluster);
+  const baseline = await beforeIngest(job.cluster, before);
 
   const prompt = [
     `A new pre-formatted source document has been saved directly to: ${rawPath}`,
@@ -164,7 +169,11 @@ async function ingest(job: Job, rawPath: string): Promise<void> {
     if (code !== 0) throw new Error(`Hermes exited with code ${code}`);
 
     job.diff = await diffAgainst(job.cluster, before);
-    job.status = 'done';
+
+    // The agent exited cleanly. That says nothing about whether it did the
+    // job. Look at the disk before telling the user it is filed.
+    job.lint = await lintAfterIngest(job.cluster, baseline);
+    job.status = job.lint.ok ? 'done' : 'attention';
   } catch (err) {
     job.status = 'failed';
     job.error = err instanceof Error ? err.message : String(err);
