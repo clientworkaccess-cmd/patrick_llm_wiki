@@ -52,16 +52,21 @@ if (!WIKI_PATH) {
 }
 
 /**
- * Which of the three jobs this is.
+ * Which of the four jobs this is.
  *
- * Decided by an explicit flag, never by sniffing the prompt. Prompt-matching is
- * what silently turned every local ingest into a chat answer for six weeks when
- * the upload route reworded one sentence on 2026-08-25; with three prompts in
- * play that bug would now have three places to hide. --plan-file implies
- * planning, so the dashboard only has to be explicit about execution.
+ * Decided by an explicit marker line, never by sniffing the prompt.
+ * Prompt-matching is what silently turned every local ingest into a chat answer
+ * for six weeks when the upload route reworded one sentence on 2026-08-25; with
+ * four prompts in play that bug would now have four places to hide.
+ *
+ *   PLAN     read-only pass in the sandbox, writes plan.json
+ *   EXECUTE  carry out an approved plan (review path)
+ *   INGEST   file the document in one run (automatic path, the default)
+ *   (none)   answer a question
  */
-const marker = prompt.match(/^TASK:\s*(PLAN|EXECUTE)\s*$/im)?.[1]?.toUpperCase();
-const MODE = marker === 'PLAN' ? 'plan' : marker === 'EXECUTE' ? 'execute' : 'answer';
+const marker = prompt.match(/^TASK:\s*(PLAN|EXECUTE|INGEST)\s*$/im)?.[1]?.toUpperCase();
+const MODE =
+  marker === 'PLAN' ? 'plan' : marker === 'EXECUTE' ? 'execute' : marker === 'INGEST' ? 'ingest' : 'answer';
 
 // A planning run with no path to write to would "succeed" having produced
 // nothing, and the dashboard would blame the agent. Fail loudly instead.
@@ -72,7 +77,7 @@ if (MODE === 'plan' && !planFile) {
 
 if (MODE === 'plan') {
   await makePlan();
-} else if (MODE === 'execute') {
+} else if (MODE === 'execute' || MODE === 'ingest') {
   await ingest();
 } else {
   await answer();
@@ -153,6 +158,7 @@ async function makePlan() {
 async function ingest() {
   const source =
     prompt.match(/source document is at\s+(\S+?)[.\s]/i)?.[1]?.trim() ??
+    prompt.match(/document has been saved to\s+(\S+?)[.\s]/i)?.[1]?.trim() ??
     prompt.match(/(?:placed at|saved directly to):\s*(\S+)/)?.[1]?.trim() ??
     'the uploaded file';
   const label = path.basename(source).replace(/^[0-9a-f-]{36}__/, '');

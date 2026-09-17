@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * Drives one ingest through the real job pipeline against a throwaway wiki and
- * prints the job's final status and lint findings. Pass a skip list to make the
- * fake agent misbehave and exercise the failure paths:
+ * Drives one automatic ingest (the default path, one agent run) through the
+ * real job pipeline against a throwaway wiki and prints the job's final status
+ * and lint findings. Pass a skip list to make the fake agent misbehave and
+ * exercise the failure paths:
  *
  *   npm run check:lint             -> done, no findings
  *   npm run check:lint -- index    -> attention (index-not-updated is an error)
@@ -29,7 +30,7 @@ process.env.HERMES_CMD = 'node';
 process.env.HERMES_ARGS = skip ? `scripts/fake-hermes.mjs --skip ${skip}` : 'scripts/fake-hermes.mjs';
 
 const { createCluster } = await import(lib('clusters'));
-const { startPlanning, approvePlan, getJob, subscribe, isActive } = await import(lib('jobs'));
+const { startIngest, getJob, subscribe, isActive } = await import(lib('jobs'));
 const { STAGING_DIR } = await import(lib('config'));
 
 await createCluster({ name: 'ops', scope: 'Returns and refunds', entities: '', questions: '' });
@@ -42,11 +43,8 @@ const settle = (job) =>
     const stop = subscribe(job.id, (j) => isActive(j.status) || (stop(), resolve(j)));
   });
 
-// The check runs on what execution wrote, so drive the gate: plan, approve,
-// then look at the disk. The --skip flags only bite during execution.
-let job = await startPlanning({ cluster: 'ops', filename: 'note.md', stagedPath: staged, originalPath: null });
-await settle(job);
-job = await approvePlan(job.id);
+// The automatic path: one run, then the check looks at the disk.
+const job = await startIngest({ cluster: 'ops', filename: 'note.md', stagedPath: staged, originalPath: null });
 await settle(job);
 const final = await getJob(job.id);
 console.log(JSON.stringify({ skip, status: final.status, diff: final.diff, findings: final.lint?.findings.map((f) => `${f.severity}:${f.code}`) }, null, 1));

@@ -35,11 +35,12 @@ export interface LintResult {
   checkedAt: string;
 }
 
-interface Before {
+export interface Baseline {
   index: string | null;
   log: string | null;
   snapshot: Snapshot;
 }
+type Before = Baseline;
 
 /** Capture what the check will compare against. Call before the agent runs. */
 export async function beforeIngest(cluster: string, snapshot: Snapshot): Promise<Before> {
@@ -60,10 +61,12 @@ export async function lintAfterIngest(cluster: string, before: Before): Promise<
 
   const all = PAGE_DIRS.flatMap((dir) => grouped[dir]);
   const changed = new Set<string>();
+  const created = new Set<string>();
   for (const ref of all) {
     const raw = await readIfPresent(clusterPath(cluster, `${ref.slug}.md`));
     if (raw === null) continue;
     const previous = before.snapshot.pages.get(ref.slug);
+    if (previous === undefined) created.add(ref.slug);
     if (previous === undefined || previous !== fingerprint(raw)) changed.add(ref.slug);
   }
 
@@ -78,12 +81,14 @@ export async function lintAfterIngest(cluster: string, before: Before): Promise<
     });
   }
 
-  // 2. index.md must change whenever a page did.
-  if (changed.size > 0 && index === before.index) {
+  // 2. index.md must change whenever a page was created. An ingest that only
+  //    updates existing pages can leave the index byte-identical and be right;
+  //    a new page that never reaches the index is invisible to the agent.
+  if (created.size > 0 && index === before.index) {
     findings.push({
       code: 'index-not-updated',
       severity: 'error',
-      detail: 'Pages were written but index.md did not change. New pages will not be found by the agent or the sidebar until it is updated.',
+      detail: 'New pages were written but index.md did not change. They will not be found by the agent or the sidebar until it is updated.',
     });
   }
 

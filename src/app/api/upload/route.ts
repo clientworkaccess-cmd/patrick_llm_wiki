@@ -4,7 +4,8 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { HttpError, ORIGINALS_DIR, STAGING_DIR, assertClusterName, clusterPath } from '@/lib/config';
 import { ensureDashboardDirs, exists } from '@/lib/clusters';
-import { startPlanning } from '@/lib/jobs';
+import { startIngest, startPlanning } from '@/lib/jobs';
+import { readSettings } from '@/lib/settings';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -14,9 +15,10 @@ export const runtime = 'nodejs';
  * original binary files, formats SHA256 frontmatter, and stages the source in
  * .dashboard/staging/ — outside any cluster.
  *
- * It used to write straight into $WIKI_PATH/raw/ and spawn the agent. It no
- * longer does: nothing enters a cluster until a human has read the plan and
- * approved it. The file moves staging → raw/ in the approve handler, and a
+ * What happens next depends on the cluster's review switch (settings.ts).
+ * Off, the default: the document moves into raw/ and the agent files it in one
+ * run. On: nothing enters the cluster until a human has read the plan and
+ * approved it; the file moves staging → raw/ in the approve handler, and a
  * rejected upload is deleted rather than left behind in raw/ forever.
  */
 export async function POST(req: NextRequest) {
@@ -78,9 +80,10 @@ export async function POST(req: NextRequest) {
 
     await fs.writeFile(stagedPath, contentToWrite, 'utf8');
 
-    // 4. Read the document and propose a plan. Nothing is written to the
-    //    cluster by this — the planning pass runs against a throwaway copy.
-    const job = await startPlanning({
+    // 4. File it, or propose a plan first, per the cluster's switch.
+    const { reviewBeforeFiling } = await readSettings(cluster);
+    const start = reviewBeforeFiling ? startPlanning : startIngest;
+    const job = await start({
       cluster,
       filename: baseName,
       stagedPath,
