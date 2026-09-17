@@ -26,11 +26,10 @@ const usageFile = process.argv.includes('--usage-file')
   ? process.argv[process.argv.indexOf('--usage-file') + 1]
   : null;
 
-// Where a planning run writes its JSON. The dashboard hands this over as an
-// argument, the same way it hands over --usage-file.
-const planFile = process.argv.includes('--plan-file')
-  ? process.argv[process.argv.indexOf('--plan-file') + 1]
-  : null;
+// Where a planning run writes its JSON. Named in the prompt, not on the command
+// line: `--plan-file` was a flag the dashboard invented, and the real binary
+// exited 2 on the unknown option before reading anything.
+const planFile = prompt.match(/JSON to this exact path:\s*(.+)/)?.[1]?.trim() ?? null;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -61,13 +60,15 @@ if (!WIKI_PATH) {
  * play that bug would now have three places to hide. --plan-file implies
  * planning, so the dashboard only has to be explicit about execution.
  */
-const MODE = planFile
-  ? 'plan'
-  : process.argv.includes('--mode')
-    ? process.argv[process.argv.indexOf('--mode') + 1]
-    : /A human has reviewed and approved the plan/i.test(prompt)
-      ? 'execute'
-      : 'answer';
+const marker = prompt.match(/^TASK:\s*(PLAN|EXECUTE)\s*$/im)?.[1]?.toUpperCase();
+const MODE = marker === 'PLAN' ? 'plan' : marker === 'EXECUTE' ? 'execute' : 'answer';
+
+// A planning run with no path to write to would "succeed" having produced
+// nothing, and the dashboard would blame the agent. Fail loudly instead.
+if (MODE === 'plan' && !planFile) {
+  console.error('fake-hermes: TASK: PLAN but the prompt names no output path');
+  process.exit(2);
+}
 
 if (MODE === 'plan') {
   await makePlan();

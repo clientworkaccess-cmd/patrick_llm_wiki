@@ -18,6 +18,15 @@ export interface HermesRun {
   lines: AsyncGenerator<string>;
   /** Resolves with the exit code once the process ends. */
   done: Promise<number>;
+  /**
+   * The tail of stderr. Empty unless the agent complained.
+   *
+   * Exists because "Hermes exited with code 2" is not a diagnosis. When the
+   * dashboard passed a flag the binary did not have, the reason was sitting in
+   * stderr on the VPS while the dashboard showed a generic failure and pointed
+   * the reader at the document. The cause belongs on the screen with the error.
+   */
+  stderrTail: () => string;
   kill: () => void;
 }
 
@@ -55,12 +64,19 @@ export function runHermes(opts: {
    * than WIKI_PATH would escape the sandbox. Both have to move together.
    */
   wikiRoot?: string;
-  /** Extra args, e.g. the file a planning run writes its JSON into. */
-  extraArgs?: string[];
 }): HermesRun {
+  /**
+   * Only flags the real binary actually has.
+   *
+   * There is no arbitrary-args escape hatch here on purpose. One existed
+   * briefly and was used to pass an invented `--plan-file`; Hermes rejected the
+   * whole invocation with exit code 2, which surfaced in the UI as "Ingest
+   * failed" with no hint that the cause was the command line rather than the
+   * document. Anything the agent needs to be told belongs in the prompt, where
+   * being wrong costs a bad answer instead of a dead process.
+   */
   const args = [...HERMES_ARGS, '-z', opts.prompt, '--yolo'];
   if (opts.usageFile) args.push('--usage-file', opts.usageFile);
-  if (opts.extraArgs?.length) args.push(...opts.extraArgs);
 
   const child = spawn(HERMES_CMD, args, {
     env: narrowEnv(opts.clusterPath, opts.wikiRoot),
@@ -103,12 +119,24 @@ export function runHermes(opts: {
     if (buffer.length) yield buffer;
   }
 
-  // stderr is diagnostics, not product output. Surface it in the server log so a
-  // failing ingest isn't a silent mystery, but never stream it to the client.
+  // stderr is diagnostics, not product output: it goes to the server log and is
+  // never streamed to the client as if it were the agent's answer. The tail is
+  // kept so a failed run can say why it failed. Bounded, because a crash loop
+  // can produce a lot of it.
+  const stderrChunks: string[] = [];
   child.stderr.setEncoding('utf8');
-  child.stderr.on('data', (d: string) => console.error('[hermes]', d.trimEnd()));
+  child.stderr.on('data', (d: string) => {
+    console.error('[hermes]', d.trimEnd());
+    stderrChunks.push(d);
+    if (stderrChunks.length > 50) stderrChunks.shift();
+  });
 
-  return { lines: lines(), done, kill: () => child.kill('SIGTERM') };
+  return {
+    lines: lines(),
+    done,
+    stderrTail: () => stderrChunks.join('').trim().split('\n').slice(-5).join(' ').slice(0, 500),
+    kill: () => child.kill('SIGTERM'),
+  };
 }
 
 /** Collect a full run into one string. Used for short, non-streaming calls. */

@@ -349,14 +349,22 @@ async function plan(
     const basis = toBasis(await snapshot(job.cluster));
 
     sandbox = await planningSandbox(job.cluster, job.stagedPath);
-    const planFile = path.join(sandbox.root, 'plan.json');
+
+    // Inside the sandbox's cluster directory, which is the agent's WIKI_PATH —
+    // somewhere it can already write, using the tools it already has.
+    //
+    // This was briefly a `--plan-file` command-line flag, by analogy with
+    // --usage-file. That flag does not exist: it is one the dashboard invented,
+    // and the real binary rejected the invocation with exit code 2 before it
+    // read a single document. The prompt names the path instead; nothing has to
+    // be added to Hermes's command line for the agent to write a file.
+    const planFile = path.join(sandbox.clusterDir, 'plan.json');
 
     const run = runHermes({
       prompt: planPrompt(job, sandbox.sourceRelPath, planFile, revision),
       clusterPath: sandbox.clusterDir,
       wikiRoot: sandbox.root,
       timeoutMs: PLAN_TIMEOUT_MS,
-      extraArgs: ['--plan-file', planFile],
     });
 
     for await (const line of run.lines) {
@@ -365,7 +373,7 @@ async function plan(
       emit(job);
     }
     const code = await run.done;
-    if (code !== 0) throw new Error(`Hermes exited with code ${code}`);
+    if (code !== 0) throw new Error(hermesFailure(code, run.stderrTail()));
 
     // The file is the contract; stdout is the fallback. usageFile already
     // establishes "hand the agent a path and read it back" as how structured
@@ -445,7 +453,7 @@ async function execute(job: Job, approved: Plan): Promise<void> {
       emit(job);
     }
     const code = await run.done;
-    if (code !== 0) throw new Error(`Hermes exited with code ${code}`);
+    if (code !== 0) throw new Error(hermesFailure(code, run.stderrTail()));
 
     job.diff = await diffAgainst(job.cluster, before);
 
@@ -497,6 +505,12 @@ function planPrompt(
   revision: { feedback: string; previous: Plan | null } | null,
 ): string {
   const lines = [
+    // A machine-readable marker on its own line. The real agent can ignore it;
+    // the local fake keys its behaviour off it rather than pattern-matching
+    // prose, which is how every local ingest silently became a chat answer for
+    // six weeks when one sentence of this prompt was reworded.
+    `TASK: PLAN`,
+    ``,
     `Read SCHEMA.md first — it defines this cluster's scope, what it tracks, and its naming rules.`,
     `Then read index.md to see what the wiki already knows.`,
     `The document to assess is at: ${sourceRelPath}`,
@@ -567,6 +581,8 @@ function executePrompt(job: Job, approved: Plan, rawPath: string): string {
   );
 
   return [
+    `TASK: EXECUTE`,
+    ``,
     `A human has reviewed and approved the plan below. The source document is at ${rawPath}.`,
     `Read SCHEMA.md and index.md first, then carry out the plan using the llm-wiki skill.`,
     ``,
@@ -586,6 +602,23 @@ function executePrompt(job: Job, approved: Plan, rawPath: string): string {
     `something the plan missed, write the pages that were approved and say what`,
     `you left out at the end of your output.`,
   ].join('\n');
+}
+
+/**
+ * Turn a non-zero exit into something a reader can act on.
+ *
+ * "Hermes exited with code 2" sent someone looking at their document when the
+ * actual fault was the dashboard handing the binary a flag it did not have.
+ * Exit 2 is the conventional "bad usage" code, so it gets called out by name;
+ * whatever the agent printed to stderr is appended either way, because that is
+ * where the real reason lives.
+ */
+function hermesFailure(code: number, stderr: string): string {
+  const because = stderr ? ` — ${stderr}` : '';
+  if (code === 2) {
+    return `The agent rejected how it was invoked (exit 2). This is usually a bad argument from the dashboard, not a problem with your document.${because}`;
+  }
+  return `The agent stopped with exit code ${code}.${because}`;
 }
 
 /** The basis is bookkeeping; showing it back to the agent is noise in context. */

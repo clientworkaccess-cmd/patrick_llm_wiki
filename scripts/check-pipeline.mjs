@@ -75,6 +75,19 @@ async function stage(cluster, name, body, withOriginal = true) {
 
 const SOURCE = `---\nsource_url: x\ningested: 2026-09-16\nsha256: 0\n---\nThe warehouse team checks every returned item before we release the refund.\n`;
 
+// ---------------------------------------------------------------------- 0
+// Every flag the dashboard puts on Hermes's command line must be one the real
+// binary actually has. A `--plan-file` invented here made the VPS exit 2 on the
+// unknown option before it read a single document, and the UI reported that as
+// a failed ingest — so this is a source check, not a behavioural one: the local
+// fake happily accepts anything, which is exactly why it cannot catch this.
+const KNOWN_FLAGS = new Set(['-z', '--yolo', '--usage-file']);
+const hermesSrc = await fs.readFile(new URL('../src/lib/hermes.ts', import.meta.url), 'utf8');
+const flags = [...hermesSrc.matchAll(/'(-{1,2}[a-z][a-z-]*)'/g)].map((m) => m[1]);
+const invented = flags.filter((f) => !KNOWN_FLAGS.has(f));
+check('no invented flags on the agent command line', invented.length === 0,
+  invented.length ? `unknown: ${[...new Set(invented)].join(', ')}` : `only ${[...KNOWN_FLAGS].join(', ')}`);
+
 // ---------------------------------------------------------------- 1 + 2 + 3
 await createCluster({ name: 'ops', scope: 'Returns and refunds', entities: '', questions: '' });
 const baselinePages = await pageCount('ops');
