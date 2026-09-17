@@ -304,7 +304,21 @@ export function UploadPanel({ cluster }: { cluster: string }) {
             <p className="mt-1.5 text-small text-muted">
               Nothing was half-written — the wiki is under version control.
             </p>
-            <Button variant="ghost" className="mt-4" onClick={() => setJob(null)}>
+            <Button
+              variant="ghost"
+              className="mt-4"
+              onClick={() => {
+                // Forget it here too, not only when the SSE event lands. A job
+                // that failed while the tab was shut is read back from disk on
+                // the next visit, and dismissing it should mean dismissed.
+                try {
+                  localStorage.removeItem(storageKey);
+                } catch {
+                  /* private mode, blocked storage — the card still closes */
+                }
+                setJob(null);
+              }}
+            >
               <RotateCcw className="h-4 w-4" strokeWidth={2} />
               Try again
             </Button>
