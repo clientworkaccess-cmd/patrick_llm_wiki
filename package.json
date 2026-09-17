@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "check:pipeline": "node scripts/check-pipeline.mjs",
+    "check:auto": "node scripts/check-auto.mjs",
     "check:lint": "node scripts/check-lint.mjs"
   },
   "dependencies": {

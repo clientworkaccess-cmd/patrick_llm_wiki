@@ -31,6 +31,8 @@ export const STAGING_DIR = path.join(DASHBOARD_DIR, 'staging');
 /** Proposed ingests awaiting a human decision. Dashboard state, not wiki
  *  content — which is why it lives here and not inside the cluster. */
 export const PLANS_DIR = path.join(DASHBOARD_DIR, 'plans');
+/** Per-cluster switches the dashboard owns (see settings.ts). */
+export const SETTINGS_DIR = path.join(DASHBOARD_DIR, 'settings');
 export const ORIGINALS_DIR = path.join(DASHBOARD_DIR, 'originals');
 export const TRANSCRIPTS_DIR = path.join(DASHBOARD_DIR, 'transcripts');
 

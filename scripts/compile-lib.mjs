@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const OUT_DIR = path.join(root, '.libcheck');
 
-const MODULES = ['config', 'clusters', 'wiki', 'lint', 'plans', 'sandbox', 'git', 'hermes', 'jobs'];
+const MODULES = ['config', 'clusters', 'wiki', 'lint', 'plans', 'sandbox', 'git', 'hermes', 'jobs', 'settings'];
 
 export async function compileLib() {
   await fs.rm(OUT_DIR, { recursive: true, force: true });

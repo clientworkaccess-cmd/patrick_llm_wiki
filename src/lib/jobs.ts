@@ -9,9 +9,9 @@ import {
   clusterPath,
 } from './config';
 import { ensureDashboardDirs, readIfPresent } from './clusters';
-import { runHermes } from './hermes';
-import { diffAgainst, snapshot, type IngestDiff } from './wiki';
-import { beforeIngest, lintAfterIngest, type LintResult } from './lint';
+import { runHermes, type HermesRun } from './hermes';
+import { diffAgainst, snapshot, type IngestDiff, type Snapshot } from './wiki';
+import { beforeIngest, lintAfterIngest, type Baseline, type LintResult } from './lint';
 import { planningSandbox } from './sandbox';
 import { commitCluster } from './git';
 import {
@@ -29,18 +29,24 @@ import {
 /**
  * Ingest job state.
  *
- * An ingest is two agent runs with a human between them:
+ * There are two ways a document gets filed, chosen per cluster (settings.ts):
  *
- *   planning -> awaiting_approval -> executing -> done | attention
+ *   automatic (default):  executing -> done | attention
+ *   review before filing: planning -> awaiting_approval -> executing -> done | attention
  *
- * The middle state is the product. Until someone approves, the source document
- * sits in .dashboard/staging/ and the cluster has not been touched — the
- * planning pass runs against a throwaway copy (see sandbox.ts), so "read-only"
- * is a property of where the agent is pointed rather than a sentence in its
- * prompt.
+ * Automatic is the product: a document goes in and the agent files it, with
+ * nobody in the loop. The check (lint.ts) and the commit (git.ts) run after
+ * every write either way, so what a human gets is not a gate but a report and
+ * an undo.
  *
- * Two things follow from the human gap that did not apply to the old
- * single-shot flow:
+ * Review is the exception, for a pilot's first weeks. Until someone approves,
+ * the source document sits in .dashboard/staging/ and the cluster has not been
+ * touched — the planning pass runs against a throwaway copy (see sandbox.ts),
+ * so "read-only" is a property of where the agent is pointed rather than a
+ * sentence in its prompt.
+ *
+ * Two things follow from the human gap that do not apply to the automatic
+ * path:
  *
  *  1. The per-cluster busy lock is taken for execution only. Holding it across
  *     the review would let anyone who closes a tab lock a cluster until the
@@ -335,6 +341,79 @@ export async function approvePlan(jobId: string): Promise<Job> {
   return job;
 }
 
+/**
+ * The automatic path. One agent run: the document moves into raw/ and the
+ * agent files it, then the same check and commit as after an approved plan.
+ * The busy lock is held for the whole run.
+ */
+export async function startIngest(opts: {
+  cluster: string;
+  filename: string;
+  stagedPath: string;
+  originalPath: string | null;
+}): Promise<Job> {
+  const held = busy.get(opts.cluster);
+  if (held) {
+    throw new HttpError(
+      409,
+      'This cluster is already processing a file. Wait for it to finish, then upload again.',
+    );
+  }
+
+  const job: Job = {
+    id: randomUUID(),
+    cluster: opts.cluster,
+    filename: opts.filename,
+    status: 'executing',
+    startedAt: new Date().toISOString(),
+    endedAt: null,
+    lines: [],
+    diff: null,
+    lint: null,
+    commit: null,
+    stagedPath: opts.stagedPath,
+    originalPath: opts.originalPath,
+    revision: 1,
+    error: null,
+  };
+
+  busy.set(opts.cluster, job.id);
+  cache.set(job.id, job);
+  await persist(job);
+
+  // Deliberately not awaited. The HTTP response goes out now.
+  void ingest(job);
+
+  return job;
+}
+
+async function ingest(job: Job): Promise<void> {
+  const before = await snapshot(job.cluster);
+  const baseline = await beforeIngest(job.cluster, before);
+
+  try {
+    const rawPath = await stageIntoRaw(job);
+
+    const run = runHermes({
+      prompt: ingestPrompt(job, rawPath),
+      clusterPath: clusterPath(job.cluster),
+      usageFile: path.join(JOBS_DIR, `${job.id}.usage.json`),
+      timeoutMs: INGEST_TIMEOUT_MS,
+    });
+
+    await follow(job, run);
+    await afterWrite(job, before, baseline);
+  } catch (err) {
+    job.status = 'failed';
+    job.error = err instanceof Error ? err.message : String(err);
+  } finally {
+    job.endedAt = new Date().toISOString();
+    busy.delete(job.cluster);
+    await persist(job);
+    emit(job);
+  }
+}
+
 /** The planning pass. Runs against a copy; the live cluster is not reachable. */
 async function plan(
   job: Job,
@@ -404,41 +483,15 @@ async function plan(
   }
 }
 
-/** The execution pass. The lock is held for exactly this. */
+/** The execution pass of the review path. The lock is held for exactly this. */
 async function execute(job: Job, approved: Plan): Promise<void> {
   const before = await snapshot(job.cluster);
   const baseline = await beforeIngest(job.cluster, before);
 
   try {
-    if (!job.stagedPath) throw new Error('The staged document for this ingest is gone');
-
-    // Staging → raw/. This is the first write into the cluster, and it happens
+    // This is the first write into the cluster, and on this path it happens
     // only now, after a human said yes.
-    const rawDir = clusterPath(job.cluster, 'raw');
-    await fs.mkdir(rawDir, { recursive: true });
-
-    // Staging names carry a uuid prefix so two uploads of the same filename
-    // cannot collide before either is approved. raw/ is part of the wiki's own
-    // record and gets the clean name — unless that name is already taken, in
-    // which case the prefix is what keeps this from silently overwriting an
-    // earlier source document.
-    const staged = path.basename(job.stagedPath);
-    const clean = staged.replace(/^[0-9a-f-]{36}__/i, '');
-    const rawFile = path.join(
-      rawDir,
-      (await fs.stat(path.join(rawDir, clean)).then(() => true).catch(() => false))
-        ? staged
-        : clean,
-    );
-    await fs.rename(job.stagedPath, rawFile).catch(async (err) => {
-      // rename fails across devices; staging and the wiki may be on different
-      // mounts on the VPS.
-      if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
-      await fs.copyFile(job.stagedPath!, rawFile);
-      await fs.rm(job.stagedPath!, { force: true });
-    });
-    job.stagedPath = null;
-    const rawPath = `raw/${path.basename(rawFile)}`;
+    const rawPath = await stageIntoRaw(job);
 
     const run = runHermes({
       prompt: executePrompt(job, approved, rawPath),
@@ -447,27 +500,8 @@ async function execute(job: Job, approved: Plan): Promise<void> {
       timeoutMs: INGEST_TIMEOUT_MS,
     });
 
-    for await (const line of run.lines) {
-      if (!line.trim()) continue;
-      job.lines.push(line);
-      emit(job);
-    }
-    const code = await run.done;
-    if (code !== 0) throw new Error(hermesFailure(code, run.stderrTail()));
-
-    job.diff = await diffAgainst(job.cluster, before);
-
-    // The agent exited cleanly. That says nothing about whether it did the
-    // job. Look at the disk before telling the user it is filed.
-    job.lint = await lintAfterIngest(job.cluster, baseline);
-    job.status = job.lint.ok ? 'done' : 'attention';
-
-    // The restore point, after the write and after the check — so the commit
-    // message can say what the check found.
-    job.commit = await commitCluster(
-      job.cluster,
-      `Ingest ${job.filename}\n\n${job.lint.ok ? 'Checks passed.' : 'Checks found problems; see the dashboard.'}`,
-    );
+    await follow(job, run);
+    await afterWrite(job, before, baseline);
 
     // The plan has been carried out; it is no longer a pending decision.
     await deletePlan(job.id);
@@ -480,6 +514,96 @@ async function execute(job: Job, approved: Plan): Promise<void> {
     await persist(job);
     emit(job);
   }
+}
+
+/**
+ * Staging → raw/. Shared by both paths; the difference between them is only
+ * when this is allowed to happen.
+ *
+ * Staging names carry a uuid prefix so two uploads of the same filename cannot
+ * collide before either is filed. raw/ is part of the wiki's own record and
+ * gets the clean name — unless that name is already taken, in which case the
+ * prefix is what keeps this from silently overwriting an earlier source.
+ */
+async function stageIntoRaw(job: Job): Promise<string> {
+  if (!job.stagedPath) throw new Error('The staged document for this ingest is gone');
+
+  const rawDir = clusterPath(job.cluster, 'raw');
+  await fs.mkdir(rawDir, { recursive: true });
+
+  const staged = path.basename(job.stagedPath);
+  const clean = staged.replace(/^[0-9a-f-]{36}__/i, '');
+  const rawFile = path.join(
+    rawDir,
+    (await fs.stat(path.join(rawDir, clean)).then(() => true).catch(() => false)) ? staged : clean,
+  );
+  await fs.rename(job.stagedPath, rawFile).catch(async (err) => {
+    // rename fails across devices; staging and the wiki may be on different
+    // mounts on the VPS.
+    if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
+    await fs.copyFile(job.stagedPath!, rawFile);
+    await fs.rm(job.stagedPath!, { force: true });
+  });
+  job.stagedPath = null;
+  return `raw/${path.basename(rawFile)}`;
+}
+
+/** Stream the agent's output into the job record, then insist it exited cleanly. */
+async function follow(job: Job, run: HermesRun): Promise<void> {
+  for await (const line of run.lines) {
+    if (!line.trim()) continue;
+    job.lines.push(line);
+    emit(job);
+  }
+  const code = await run.done;
+  if (code !== 0) throw new Error(hermesFailure(code, run.stderrTail()));
+}
+
+/**
+ * What happens after any write, on either path: measure the diff, check the
+ * disk, and make the restore point. The agent exiting cleanly says nothing
+ * about whether it did the job; the check is what decides done vs attention.
+ */
+async function afterWrite(job: Job, before: Snapshot, baseline: Baseline): Promise<void> {
+  job.diff = await diffAgainst(job.cluster, before);
+  job.lint = await lintAfterIngest(job.cluster, baseline);
+  job.status = job.lint.ok ? 'done' : 'attention';
+
+  // After the write and after the check, so the commit message can say what
+  // the check found.
+  job.commit = await commitCluster(
+    job.cluster,
+    `Ingest ${job.filename}\n\n${job.lint.ok ? 'Checks passed.' : 'Checks found problems; see the dashboard.'}`,
+  );
+}
+
+/**
+ * The automatic path's prompt: the skill's own ingestion procedure, in full,
+ * with the same closing ask as the planning pass — say what was left out — so
+ * a dropped item is visible on this path too.
+ */
+function ingestPrompt(job: Job, rawPath: string): string {
+  return [
+    `TASK: INGEST`,
+    ``,
+    `A new source document has been saved to ${rawPath}. It is already clean Markdown`,
+    `with SHA256 frontmatter; do not convert it.`,
+    ``,
+    `Read SCHEMA.md first — it defines this cluster's scope, what it tracks, and its`,
+    `naming rules. Then read index.md to see what the wiki already knows.`,
+    ``,
+    `File it using the llm-wiki skill's ingestion procedure:`,
+    `1. Extract the people, teams, systems and vendors (entities) and the ideas,`,
+    `   workflows, procedures and decisions (concepts) the source covers, within the`,
+    `   cluster's scope.`,
+    `2. Prefer updating an existing page over creating a near-duplicate.`,
+    `3. Every page you create or change carries at least two [[wikilinks]] to other`,
+    `   pages in this cluster.`,
+    `4. Update index.md with a one-line summary for every page you created or changed.`,
+    `5. Append a single entry to log.md in the format: ## [YYYY-MM-DD] ingest | ${job.filename}`,
+    ``,
+    `Finish by listing what you deliberately left out of the wiki, and why.`,
+  ].join('\n');
 }
 
 /**

@@ -93,6 +93,15 @@ auth, proxy config and reconnect from plain HTTP.
 the file is on disk. A refresh, a navigation, or a proxy timeout cannot kill a
 write that runs for minutes. The browser reattaches over SSE.
 
+**Filing is automatic by default.** A document goes in and the agent files it
+in one run; the post-ingest check then reads the disk, the result is committed
+per cluster, and anything can be reverted. Each cluster has a switch, **Review
+each document before it is filed** (`.dashboard/settings/<cluster>.json`), that
+turns on a two-phase flow instead: a read-only planning pass in a throwaway copy
+of the cluster, a review screen, and only then the write. It costs a second
+agent run and a click per document, so it is off unless a pilot wants to watch
+the agent's understanding for a while.
+
 ---
 
 ## Two constraints that break quietly if violated

@@ -1,6 +1,8 @@
 import { FileQuestion, ScrollText } from 'lucide-react';
 import { readIndex, readLog, titleIndex, listPages, PAGE_DIRS } from '@/lib/wiki';
 import { UploadPanel } from '@/components/UploadPanel';
+import { ReviewToggle } from '@/components/ReviewToggle';
+import { readSettings } from '@/lib/settings';
 import { MarkdownView } from '@/components/MarkdownView';
 import { Reveal } from '@/components/Reveal';
 import { Card, EmptyState } from '@/components/ui';
@@ -10,11 +12,12 @@ export const dynamic = 'force-dynamic';
 /** The cluster's front page: upload, then the agent's own index.md catalog. */
 export default async function ClusterIndex({ params }: { params: Promise<{ cluster: string }> }) {
   const { cluster } = await params;
-  const [index, log, titles, pages] = await Promise.all([
+  const [index, log, titles, pages, settings] = await Promise.all([
     readIndex(cluster),
     readLog(cluster, 6),
     titleIndex(cluster),
     listPages(cluster),
+    readSettings(cluster),
   ]);
 
   const pageCount = PAGE_DIRS.reduce((n, dir) => n + pages[dir].length, 0);
@@ -22,6 +25,7 @@ export default async function ClusterIndex({ params }: { params: Promise<{ clust
   return (
     <div className="space-y-10">
       <UploadPanel cluster={cluster} />
+      <ReviewToggle cluster={cluster} initial={settings.reviewBeforeFiling} />
 
       {pageCount === 0 ? (
         <Reveal delay={0.12}>
