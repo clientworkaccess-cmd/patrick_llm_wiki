@@ -28,11 +28,21 @@ export const HERMES_ARGS = (process.env.HERMES_ARGS ?? 'scripts/fake-hermes.mjs'
 export const DASHBOARD_DIR = path.join(WIKI_ROOT, '.dashboard');
 export const JOBS_DIR = path.join(DASHBOARD_DIR, 'jobs');
 export const STAGING_DIR = path.join(DASHBOARD_DIR, 'staging');
+/** Proposed ingests awaiting a human decision. Dashboard state, not wiki
+ *  content — which is why it lives here and not inside the cluster. */
+export const PLANS_DIR = path.join(DASHBOARD_DIR, 'plans');
 export const ORIGINALS_DIR = path.join(DASHBOARD_DIR, 'originals');
 export const TRANSCRIPTS_DIR = path.join(DASHBOARD_DIR, 'transcripts');
 
 /** Hard ceiling on a single ingest before we give up and mark the job failed. */
 export const INGEST_TIMEOUT_MS = Number(process.env.INGEST_TIMEOUT_MS ?? 15 * 60 * 1000);
+
+/**
+ * Planning gets its own budget. It reads the source and the existing wiki but
+ * writes nothing, so it is the cheaper half — a single ceiling covering both
+ * phases would let a slow plan eat the whole allowance for the write.
+ */
+export const PLAN_TIMEOUT_MS = Number(process.env.PLAN_TIMEOUT_MS ?? 10 * 60 * 1000);
 
 const CLUSTER_NAME = /^[a-z0-9_-]+$/;
 

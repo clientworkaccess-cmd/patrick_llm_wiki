@@ -1,10 +1,31 @@
 import mammoth from 'mammoth';
 import TurndownService from 'turndown';
-import * as pdfjs from 'pdfjs-dist';
 
-// Configure pdfjs worker for browser execution
-if (typeof window !== 'undefined') {
-  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version || '4.10.38'}/pdf.worker.min.mjs`;
+/**
+ * pdfjs is loaded on first use, in the browser, rather than imported at module
+ * scope.
+ *
+ * A static import evaluates pdfjs-dist during server rendering too, and its
+ * module body touches DOMMatrix, which does not exist in Node — so every
+ * server-render of the cluster page threw `ReferenceError: DOMMatrix is not
+ * defined` and returned a 500. The page recovered on the client, which is why
+ * it looked like a slow first load rather than a failure.
+ *
+ * Nothing here is needed until someone actually picks a PDF, so deferring it
+ * costs nothing and keeps the module off the server entirely.
+ */
+type PdfjsModule = typeof import('pdfjs-dist');
+let pdfjsPromise: Promise<PdfjsModule> | null = null;
+
+async function loadPdfjs(): Promise<PdfjsModule> {
+  if (typeof window === 'undefined') {
+    throw new Error('PDF parsing runs in the browser only');
+  }
+  pdfjsPromise ??= import('pdfjs-dist').then((pdfjs) => {
+    pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version || '4.10.38'}/pdf.worker.min.mjs`;
+    return pdfjs;
+  });
+  return pdfjsPromise;
 }
 
 const turndown = new TurndownService({
@@ -30,6 +51,7 @@ export async function parseDocx(file: File): Promise<string> {
  * Enforces an OCR guard check to reject image-only scanned PDFs.
  */
 export async function parsePdf(file: File): Promise<{ text: string; pageCount: number }> {
+  const pdfjs = await loadPdfjs();
   const buffer = await file.arrayBuffer();
   const loadingTask = pdfjs.getDocument({ data: buffer });
   const pdfDoc = await loadingTask.promise;

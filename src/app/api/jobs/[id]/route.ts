@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getJob, subscribe } from '@/lib/jobs';
+import { getJob, isActive, subscribe } from '@/lib/jobs';
 import { sseResponse } from '@/lib/sse';
 import { HttpError } from '@/lib/config';
 
@@ -32,14 +32,19 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
   return sseResponse(({ send, close }) => {
     send('job', job);
-    if (job.status !== 'running') {
+
+    // An ingest is now two agent runs with a human decision between them, so
+    // the stream ends whenever no process is running — including at
+    // awaiting_approval, which is a resting state, not a finished one. The
+    // client re-attaches when the human approves or asks for a revision.
+    if (!isActive(job.status)) {
       close();
       return;
     }
 
     const unsubscribe = subscribe(id, (updated) => {
       send('job', updated);
-      if (updated.status !== 'running') {
+      if (!isActive(updated.status)) {
         send('end', { status: updated.status });
         close();
       }

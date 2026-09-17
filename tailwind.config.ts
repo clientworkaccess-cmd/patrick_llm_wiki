@@ -1,57 +1,88 @@
 import type { Config } from 'tailwindcss';
 
-// Tokens are lifted verbatim from Desing.md. Anything not in that file does not
-// belong here — if a colour is needed that isn't below, the design spec changes first.
+// Tokens are lifted verbatim from Desing.md (Obsidian — Style Reference: Crystalline Knowledge Vault).
 const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        base: '#050505', // Preto Base — primary background surface
-        elevated: '#0D0D0F', // one step up from base, for cards on dark
-        line: 'rgba(255,255,255,0.08)', // hairline borders
-        glass: 'rgba(255,255,255,0.1)', // Vidro Navbar
-        ink: '#FFFFFF', // Branco
-        muted: '#9CA3AF', // Cinza Texto — primary body text
-        accent: '#3B82F6', // Azul Gradiente
-        surface: '#F9F9FA', // Dashboard Claro — light surfaces only
-        success: '#22C55E', // Verde Trend
-        danger: '#EF4444', // Vermelho Trend
+        // Core Obsidian Palette
+        white: '#ffffff',
+        bright: '#eeeeee',
+        medium: '#bcbcbc',
+        muted: '#a3a3a3',
+        graphite: '#3f3f3f',
+        surface: '#1e1e1e',
+        abyss: '#171717',
+        amethyst: '#7c3aed',
+        lavender: '#a78bfa',
+        'tag-bg': 'rgba(138, 92, 245, 0.15)',
+        success: '#4ade80',
+        warning: '#facc15',
+        error: '#f87171',
+
+        // Semantic mapping to Obsidian theme
+        base: '#171717', // maps to Abyss
+        elevated: '#1e1e1e', // maps to Surface
+        line: '#3f3f3f', // maps to Graphite
+        glass: 'rgba(30, 30, 30, 0.85)',
+        ink: '#eeeeee', // maps to Bright Gray
+        accent: '#7c3aed', // maps to Amethyst
+        danger: '#f87171', // maps to Error Red
       },
       fontFamily: {
-        sans: ['var(--font-manrope)', 'system-ui', 'sans-serif'],
-        serif: ['var(--font-instrument-serif)', 'Georgia', 'serif'],
-        mono: ['var(--font-jetbrains-mono)', 'ui-monospace', 'monospace'],
+        sans: [
+          'ui-sans-serif',
+          'system-ui',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          '"Segoe UI"',
+          'Roboto',
+          'sans-serif',
+        ],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       fontSize: {
-        hero: ['clamp(2.5rem, 5vw, 4rem)', { lineHeight: '1.05', letterSpacing: '-0.03em' }],
-        h1: ['2.25rem', { lineHeight: '1.15', letterSpacing: '-0.02em' }],
-        h2: ['1.5rem', { lineHeight: '1.25', letterSpacing: '-0.01em' }],
-        body: ['1rem', { lineHeight: '1.6' }],
-        small: ['0.875rem', { lineHeight: '1.5' }],
+        caption: ['12px', { lineHeight: '1.5', letterSpacing: '-0.24px' }],
+        'body-sm': ['14px', { lineHeight: '1.5', letterSpacing: '-0.28px' }],
+        small: ['14px', { lineHeight: '1.5', letterSpacing: '-0.28px' }],
+        body: ['16px', { lineHeight: '1.5', letterSpacing: '-0.32px' }],
+        subheading: ['18px', { lineHeight: '1.4', letterSpacing: '-0.36px' }],
+        'heading-sm': ['24px', { lineHeight: '1.33', letterSpacing: '-0.48px' }],
+        h2: ['24px', { lineHeight: '1.33', letterSpacing: '-0.48px' }],
+        heading: ['28px', { lineHeight: '1.25', letterSpacing: '-0.56px' }],
+        h1: ['28px', { lineHeight: '1.25', letterSpacing: '-0.56px' }],
+        'heading-lg': ['36px', { lineHeight: '1.25', letterSpacing: '-0.72px' }],
+        display: ['60px', { lineHeight: '1.1', letterSpacing: '-1.2px' }],
+        hero: ['60px', { lineHeight: '1.1', letterSpacing: '-1.2px' }],
       },
       borderRadius: {
-        DEFAULT: '8px', // base corner radius
-        lg: '12px',
-        xl: '16px',
+        DEFAULT: '8px',
+        md: '4px',
+        lg: '8px', // inputs, buttons
+        xl: '12px', // cards
+        '2xl': '16px',
+        full: '9999px', // tags, badges
       },
       maxWidth: {
-        shell: '1280px',
-        prose: '72ch', // body copy line cap
+        shell: '1120px', // Page max-width: 1120px from Desing.md
+        prose: '72ch',
       },
       boxShadow: {
-        card: '0 2px 12px rgba(0,0,0,0.06)',
-        lift: '0 8px 28px rgba(0,0,0,0.35)',
+        subtle: 'rgba(255, 255, 255, 0.05) 0px 0px 0px 1px inset',
+        'subtle-2': 'rgba(255, 255, 255, 0.1) 0px 0px 0px 1px inset',
+        'subtle-3':
+          'rgba(255, 255, 255, 0.1) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0.1) 0px 1px 3px 0px',
+        card: 'rgba(255, 255, 255, 0.05) 0px 0px 0px 1px inset',
+        lift: 'rgba(255, 255, 255, 0.08) 0px 0px 0px 1px inset, rgba(0, 0, 0, 0.25) 0px 25px 50px -12px',
       },
       zIndex: {
-        // z-index contract from Desing.md — do not invent new layers
         sticky: '100',
         overlay: '200',
         modal: '300',
         toast: '500',
       },
       keyframes: {
-        // Skeletons shimmer. Desing.md forbids circular spinners.
         shimmer: {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },

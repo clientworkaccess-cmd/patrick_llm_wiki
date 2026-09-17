@@ -26,6 +26,12 @@ const usageFile = process.argv.includes('--usage-file')
   ? process.argv[process.argv.indexOf('--usage-file') + 1]
   : null;
 
+// Where a planning run writes its JSON. The dashboard hands this over as an
+// argument, the same way it hands over --usage-file.
+const planFile = process.argv.includes('--plan-file')
+  ? process.argv[process.argv.indexOf('--plan-file') + 1]
+  : null;
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // `--skip index,log` makes the fake misbehave on purpose, so the post-ingest
@@ -46,19 +52,108 @@ if (!WIKI_PATH) {
   process.exit(1);
 }
 
-// Matches both the original wording and the one the upload route uses since the
-// 2026-08-25 change ("saved directly to"). With only the old phrase every local
-// ingest was silently handled as a chat answer and wrote nothing.
-const isIngest = /source document has been (placed|saved directly to)/i.test(prompt);
+/**
+ * Which of the three jobs this is.
+ *
+ * Decided by an explicit flag, never by sniffing the prompt. Prompt-matching is
+ * what silently turned every local ingest into a chat answer for six weeks when
+ * the upload route reworded one sentence on 2026-08-25; with three prompts in
+ * play that bug would now have three places to hide. --plan-file implies
+ * planning, so the dashboard only has to be explicit about execution.
+ */
+const MODE = planFile
+  ? 'plan'
+  : process.argv.includes('--mode')
+    ? process.argv[process.argv.indexOf('--mode') + 1]
+    : /A human has reviewed and approved the plan/i.test(prompt)
+      ? 'execute'
+      : 'answer';
 
-if (isIngest) {
+if (MODE === 'plan') {
+  await makePlan();
+} else if (MODE === 'execute') {
   await ingest();
 } else {
   await answer();
 }
 
+/**
+ * The planning pass. Reads, reports, writes nothing into the wiki — except that
+ * with `--skip sandbox` it deliberately tries to, so the sandbox in lib/sandbox.ts
+ * can be shown to contain a misbehaving agent rather than merely asking it nicely.
+ */
+async function makePlan() {
+  const source = prompt.match(/document to assess is at:\s*(\S+)/i)?.[1]?.trim() ?? 'the uploaded file';
+  const label = path.basename(source).replace(/^[0-9a-f-]{36}__/, '');
+  const revising = /This is a revision/i.test(prompt);
+
+  await say('Reading SCHEMA.md to understand this cluster.');
+  await say(`Reading ${label}.`);
+  await say(revising ? 'Reworking the plan with your correction.' : 'Checking what the wiki already covers.');
+
+  if (SKIP.has('sandbox')) {
+    // A planner that ignores "do not write". If the sandbox works, this lands
+    // in a temp directory and the real cluster never sees it.
+    await fs.mkdir(path.join(WIKI_PATH, 'entities'), { recursive: true });
+    await fs.writeFile(path.join(WIKI_PATH, 'entities', 'planner-was-here.md'), '# Planner Was Here\n');
+    await fs.writeFile(path.join(WIKI_PATH, 'index.md'), '# Clobbered by the planning pass\n');
+  }
+
+  const plan = {
+    pages: [
+      {
+        kind: 'entity',
+        name: 'Warehouse Team',
+        summary: 'Runs the returns floor and inspects items before refunds',
+        quote: 'The warehouse team checks every returned item before we release the refund.',
+        existing: true,
+      },
+      {
+        kind: 'entity',
+        name: 'Returns Portal',
+        summary: 'Where a customer starts a return',
+        quote: 'Customers open a return through the portal, not by emailing support.',
+        existing: false,
+      },
+      {
+        kind: 'concept',
+        name: 'Refund Policy',
+        summary: 'How refunds are assessed, approved and paid',
+        quote: 'Refunds are released once the item is confirmed resalable.',
+        existing: false,
+      },
+    ],
+    decisions: [
+      {
+        statement: revising
+          ? 'Refund window extended from 14 to 30 days (revised per your note)'
+          : 'Refund window extended from 14 to 30 days',
+        by: 'Mark',
+        quote: 'Mark signed off on moving the window from fourteen days to thirty.',
+      },
+    ],
+    links: [
+      { from: 'Returns Portal', to: 'Warehouse Team', why: 'the team that processes what the portal receives' },
+      { from: 'Returns Portal', to: 'Refund Policy', why: 'the rules the portal applies' },
+    ],
+    skipped: [
+      { what: 'Thursday offsite scheduling chatter', why: 'not within this cluster’s scope' },
+    ],
+  };
+
+  if (planFile) {
+    await fs.writeFile(planFile, JSON.stringify(plan, null, 2), 'utf8');
+    await say(`Wrote the plan to ${path.basename(planFile)}.`, 200);
+  } else {
+    process.stdout.write(JSON.stringify(plan, null, 2) + '\n');
+  }
+}
+
 async function ingest() {
-  const source = prompt.match(/(?:placed at|saved directly to):\s*(\S+)/)?.[1]?.trim() ?? 'the uploaded file';
+  const source =
+    prompt.match(/source document is at\s+(\S+?)[.\s]/i)?.[1]?.trim() ??
+    prompt.match(/(?:placed at|saved directly to):\s*(\S+)/)?.[1]?.trim() ??
+    'the uploaded file';
   const label = path.basename(source).replace(/^[0-9a-f-]{36}__/, '');
 
   await say('Reading SCHEMA.md to understand this cluster.');

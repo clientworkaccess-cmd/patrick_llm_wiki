@@ -107,7 +107,7 @@ export function ChatPanel({ cluster, hasPages }: { cluster: string; hasPages: bo
         title="Nothing to ask yet"
         body="Once a document has been filed into this cluster, you can ask questions about it and get answers with the pages they came from."
         action={
-          <Link href={`/c/${cluster}`} className="text-accent underline underline-offset-4">
+          <Link href={`/c/${cluster}`} className="text-lavender underline underline-offset-4 decoration-lavender/40 hover:decoration-lavender">
             Add a document first
           </Link>
         }
@@ -119,7 +119,7 @@ export function ChatPanel({ cluster, hasPages }: { cluster: string; hasPages: bo
     <div className="flex min-h-[60dvh] flex-col">
       <div className="flex-1 space-y-6">
         {turns.length === 0 && (
-          <p className="max-w-prose text-body">
+          <p className="max-w-prose text-body text-medium">
             Ask anything this cluster covers. Answers come with the pages they were drawn from,
             so you can read the source yourself rather than take the answer on trust.
           </p>
@@ -127,10 +127,10 @@ export function ChatPanel({ cluster, hasPages }: { cluster: string; hasPages: bo
 
         {turns.map((turn, i) => (
           <div key={i} className="space-y-3">
-            <p className="text-ink font-medium">{turn.question}</p>
+            <p className="text-bright font-medium text-body">{turn.question}</p>
 
             {turn.error ? (
-              <p className="text-small text-danger">{turn.error}</p>
+              <p className="text-body-sm text-error">{turn.error}</p>
             ) : turn.answer ? (
               <div className="md whitespace-pre-wrap">{stripSources(turn.answer)}</div>
             ) : (
@@ -143,11 +143,11 @@ export function ChatPanel({ cluster, hasPages }: { cluster: string; hasPages: bo
 
             {turn.sources.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                <span className="text-small text-muted/60">From</span>
+                <span className="text-caption text-muted">From</span>
                 {turn.sources.map((source) => (
                   <span
                     key={source}
-                    className="rounded-full border border-accent/30 px-2.5 py-0.5 text-small text-accent"
+                    className="rounded-full border border-lavender/30 bg-tag-bg px-2.5 py-0.5 text-caption font-medium text-lavender"
                   >
                     {source}
                   </span>
@@ -159,7 +159,7 @@ export function ChatPanel({ cluster, hasPages }: { cluster: string; hasPages: bo
         <div ref={bottomRef} />
       </div>
 
-      <Card className="sticky bottom-4 mt-8 p-2">
+      <Card className="sticky bottom-4 mt-8 p-2 border border-graphite bg-surface shadow-subtle">
         <div className="flex items-end gap-2">
           <textarea
             rows={1}
@@ -178,7 +178,7 @@ export function ChatPanel({ cluster, hasPages }: { cluster: string; hasPages: bo
                 ? 'Ask what the Marketing cluster is about...'
                 : 'Ask what the Operations cluster is about...'
             }
-            className="max-h-40 flex-1 resize-none bg-transparent px-3 py-2.5 text-body text-ink placeholder:text-muted/50 focus:outline-none"
+            className="max-h-40 flex-1 resize-none bg-transparent px-3 py-2.5 text-body text-bright placeholder:text-muted/60 focus:outline-none"
           />
           {busy ? (
             <Button variant="ghost" onClick={() => abortRef.current?.abort()} aria-label="Stop">

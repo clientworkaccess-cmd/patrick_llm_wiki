@@ -12,16 +12,17 @@ function cx(...parts: (string | false | null | undefined)[]): string {
 }
 
 const BUTTON_BASE =
-  'inline-flex items-center justify-center gap-2 rounded font-semibold text-small transition-all duration-200 ' +
-  'disabled:opacity-40 disabled:pointer-events-none active:translate-y-px';
+  'inline-flex items-center justify-center gap-2 rounded-lg font-medium text-small transition-all duration-150 ' +
+  'disabled:opacity-40 disabled:pointer-events-none active:translate-y-px select-none';
 
 const VARIANTS = {
-  // Accent fill, hover darkens 8% and lifts. No outer glow — the spec is explicit.
-  primary: 'bg-accent text-ink px-4 py-2.5 hover:bg-[#2f6fdb] hover:shadow-lift',
-  // 1.5px outline in a muted tone, subtle fill on hover.
-  ghost: 'border-[1.5px] border-line text-ink px-4 py-2.5 hover:bg-white/5',
-  quiet: 'text-muted px-3 py-2 hover:text-ink hover:bg-white/5',
-  danger: 'border-[1.5px] border-danger/40 text-danger px-4 py-2.5 hover:bg-danger/10',
+  // Primary CTA: Solid Amethyst (#7c3aed) with White (#ffffff) text, 8px radius, subtle inset glow
+  primary:
+    'bg-amethyst text-white px-5 py-2.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.2)] hover:bg-[#6d28d9] active:bg-[#5b21b6]',
+  // Secondary Ghost Button: Transparent background with Medium Gray (#bcbcbc) text
+  ghost: 'border border-graphite text-medium px-4 py-2.5 hover:text-bright hover:bg-white/[0.04]',
+  quiet: 'text-medium px-3 py-2 hover:text-bright hover:bg-white/[0.04]',
+  danger: 'border border-error/40 text-error px-4 py-2.5 hover:bg-error/10',
 } as const;
 
 type Variant = keyof typeof VARIANTS;
@@ -45,7 +46,7 @@ export function ButtonLink({
 export function Card({ className, ...rest }: ComponentProps<'div'>) {
   return (
     <div
-      className={cx('rounded border border-line bg-elevated shadow-card', className)}
+      className={cx('rounded-xl border border-graphite bg-surface shadow-subtle text-bright', className)}
       {...rest}
     />
   );
@@ -65,17 +66,17 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-small font-medium text-ink tracking-wide">{label}</span>
-      {hint && <span className="mt-1 block text-small text-muted/80">{hint}</span>}
+      <span className="block text-small font-medium text-bright tracking-normal">{label}</span>
+      {hint && <span className="mt-1 block text-small text-muted">{hint}</span>}
       <div className="mt-2">{children}</div>
-      {error && <span className="mt-1.5 block text-small text-danger">{error}</span>}
+      {error && <span className="mt-1.5 block text-small text-error">{error}</span>}
     </label>
   );
 }
 
 const INPUT =
-  'w-full rounded border border-line bg-white/[0.03] px-3.5 py-2.5 text-body text-ink ' +
-  'placeholder:text-muted/50 transition-colors focus:border-accent/60';
+  'w-full rounded-lg border border-graphite bg-abyss/80 px-3.5 py-2.5 text-body text-bright ' +
+  'placeholder:text-muted/60 transition-colors focus:border-amethyst focus:ring-1 focus:ring-amethyst shadow-subtle';
 
 export function Input({ className, ...rest }: ComponentProps<'input'>) {
   return <input className={cx(INPUT, className)} {...rest} />;
@@ -85,9 +86,9 @@ export function Textarea({ className, ...rest }: ComponentProps<'textarea'>) {
   return <textarea className={cx(INPUT, 'resize-y min-h-[7rem]', className)} {...rest} />;
 }
 
-/** Shimmer, sized to the thing it stands in for. Desing.md forbids spinners. */
+/** Shimmer, sized to the thing it stands in for. Desing.md forbids circular spinners. */
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cx('shimmer rounded', className)} aria-hidden />;
+  return <div className={cx('shimmer rounded-lg bg-surface border border-graphite/40', className)} aria-hidden />;
 }
 
 /** Icon composition + descriptive text + an action. Never a bare "no data". */
@@ -103,28 +104,34 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded border border-dashed border-line px-6 py-16 text-center">
-      <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg border border-line bg-white/[0.03]">
-        <Icon className="h-5 w-5 text-accent" strokeWidth={1.75} />
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-graphite bg-surface/30 px-6 py-16 text-center shadow-subtle">
+      <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-graphite bg-surface shadow-subtle">
+        <Icon className="h-5 w-5 text-lavender" strokeWidth={1.75} />
       </span>
-      <h2 className="text-h2 text-ink">{title}</h2>
-      <p className="mt-2 max-w-prose text-body text-muted">{body}</p>
+      <h2 className="text-h2 font-semibold text-bright">{title}</h2>
+      <p className="mt-2 max-w-prose text-body text-medium">{body}</p>
       {action && <div className="mt-6">{action}</div>}
     </div>
   );
 }
 
-export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'success' | 'danger' | 'accent' }) {
+export function Badge({
+  children,
+  tone = 'neutral',
+}: {
+  children: ReactNode;
+  tone?: 'neutral' | 'success' | 'danger' | 'accent';
+}) {
   const tones = {
-    neutral: 'border-line text-muted',
-    success: 'border-success/40 text-success',
-    danger: 'border-danger/40 text-danger',
-    accent: 'border-accent/40 text-accent',
+    neutral: 'border-graphite bg-surface text-medium',
+    success: 'border-success/30 bg-success/15 text-success',
+    danger: 'border-error/30 bg-error/15 text-error',
+    accent: 'border-lavender/30 bg-tag-bg text-lavender',
   } as const;
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[0.75rem] tracking-wide',
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium tracking-normal',
         tones[tone],
       )}
     >

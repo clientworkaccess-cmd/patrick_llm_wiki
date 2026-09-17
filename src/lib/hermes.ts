@@ -31,12 +31,12 @@ export interface HermesRun {
  *
  * Do not widen this to `...process.env`.
  */
-function narrowEnv(clusterPath: string): NodeJS.ProcessEnv {
+function narrowEnv(clusterPath: string, wikiRoot: string = WIKI_ROOT): NodeJS.ProcessEnv {
   const env: Record<string, string> = {
     PATH: process.env.PATH ?? '',
     HOME: process.env.HOME ?? '',
     WIKI_PATH: clusterPath,
-    WIKI_ROOT,
+    WIKI_ROOT: wikiRoot,
     NODE_ENV: process.env.NODE_ENV ?? 'production',
   };
   if (process.env.HERMES_API_KEY) env.HERMES_API_KEY = process.env.HERMES_API_KEY;
@@ -48,12 +48,22 @@ export function runHermes(opts: {
   clusterPath: string;
   usageFile?: string;
   timeoutMs?: number;
+  /**
+   * Override the WIKI_ROOT the agent sees. Planning runs against a throwaway
+   * copy of the cluster, and passing only `clusterPath` would leave WIKI_ROOT
+   * pointing at the live tree — so anything resolving through the root rather
+   * than WIKI_PATH would escape the sandbox. Both have to move together.
+   */
+  wikiRoot?: string;
+  /** Extra args, e.g. the file a planning run writes its JSON into. */
+  extraArgs?: string[];
 }): HermesRun {
   const args = [...HERMES_ARGS, '-z', opts.prompt, '--yolo'];
   if (opts.usageFile) args.push('--usage-file', opts.usageFile);
+  if (opts.extraArgs?.length) args.push(...opts.extraArgs);
 
   const child = spawn(HERMES_CMD, args, {
-    env: narrowEnv(opts.clusterPath),
+    env: narrowEnv(opts.clusterPath, opts.wikiRoot),
     // No shell. See above.
     shell: false,
   });

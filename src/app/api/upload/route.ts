@@ -2,17 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { HttpError, ORIGINALS_DIR, assertClusterName, clusterPath } from '@/lib/config';
+import { HttpError, ORIGINALS_DIR, STAGING_DIR, assertClusterName, clusterPath } from '@/lib/config';
 import { ensureDashboardDirs, exists } from '@/lib/clusters';
-import { startIngest } from '@/lib/jobs';
+import { startPlanning } from '@/lib/jobs';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
  * Receives pre-parsed Markdown content (or pasted text) along with optional
- * original binary files, formats SHA256 frontmatter, saves the source file directly
- * into $WIKI_PATH/raw/<filename>.md, and launches Hermes for agent delegation & curation.
+ * original binary files, formats SHA256 frontmatter, and stages the source in
+ * .dashboard/staging/ — outside any cluster.
+ *
+ * It used to write straight into $WIKI_PATH/raw/ and spawn the agent. It no
+ * longer does: nothing enters a cluster until a human has read the plan and
+ * approved it. The file moves staging → raw/ in the approve handler, and a
+ * rejected upload is deleted rather than left behind in raw/ forever.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -41,18 +46,18 @@ export async function POST(req: NextRequest) {
     const safeName = path.basename(baseName).replace(/[^\w.\- ]+/g, '_').slice(0, 120) || 'source.md';
     const mdFileName = safeName.endsWith('.md') ? safeName : `${path.parse(safeName).name}.md`;
 
-    // 1. If original binary is provided, archive it in .dashboard/originals/
+    // 1. If original binary is provided, archive it in .dashboard/originals/.
+    //    The path is recorded on the job: without it, rejecting an upload could
+    //    not clean this up and originals/ would grow forever.
+    let originalPath: string | null = null;
     if (file instanceof File) {
-      const originalStaged = path.join(ORIGINALS_DIR, `${randomUUID()}__${safeName}`);
-      await fs.writeFile(originalStaged, Buffer.from(await file.arrayBuffer()));
+      originalPath = path.join(ORIGINALS_DIR, `${randomUUID()}__${safeName}`);
+      await fs.writeFile(originalPath, Buffer.from(await file.arrayBuffer()));
     }
 
-    // 2. Prepare raw directory inside cluster: $WIKI_PATH/raw/
-    const rawDir = clusterPath(cluster, 'raw');
-    await fs.mkdir(rawDir, { recursive: true });
-
-    const rawFilePath = path.join(rawDir, mdFileName);
-    const relativeRawPath = `raw/${mdFileName}`;
+    // 2. Stage the markdown outside the cluster. The job id is not known yet,
+    //    so a uuid keeps two uploads of the same filename apart.
+    const stagedPath = path.join(STAGING_DIR, `${randomUUID()}__${mdFileName}`);
 
     // 3. Format SHA256 frontmatter over parsed content if not present
     let contentToWrite = parsedText;
@@ -71,13 +76,15 @@ export async function POST(req: NextRequest) {
       contentToWrite = frontmatter + parsedText;
     }
 
-    await fs.writeFile(rawFilePath, contentToWrite, 'utf8');
+    await fs.writeFile(stagedPath, contentToWrite, 'utf8');
 
-    // 4. Launch Hermes ingest job with clean relative path in raw/
-    const job = await startIngest({
+    // 4. Read the document and propose a plan. Nothing is written to the
+    //    cluster by this — the planning pass runs against a throwaway copy.
+    const job = await startPlanning({
       cluster,
       filename: baseName,
-      rawPath: relativeRawPath,
+      stagedPath,
+      originalPath,
     });
 
     return NextResponse.json({ jobId: job.id }, { status: 202 });

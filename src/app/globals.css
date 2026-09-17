@@ -8,7 +8,7 @@
   }
 
   body {
-    @apply bg-base text-muted font-sans text-body antialiased;
+    @apply bg-abyss text-bright font-sans text-body antialiased;
     /* Desing.md: no h-screen — use dvh so mobile browser chrome doesn't clip. */
     min-height: 100dvh;
   }
@@ -16,20 +16,20 @@
   h1,
   h2,
   h3 {
-    @apply text-ink font-sans font-bold;
+    @apply text-bright font-sans font-semibold;
   }
 
   ::selection {
-    background: rgba(59, 130, 246, 0.32);
+    background: rgba(124, 58, 237, 0.35);
     color: #ffffff;
   }
 
-  /* Focus ring: 2px accent, offset 2px. Applied globally so nothing ships unfocusable. */
+  /* Focus ring: Amethyst functional beacon, offset 2px. */
   :focus-visible {
-    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-base;
+    @apply outline-none ring-2 ring-amethyst ring-offset-2 ring-offset-abyss;
   }
 
-  /* Respect users who don't want motion. The staggered entrances are decoration. */
+  /* Respect users who don't want motion. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -42,76 +42,83 @@
 }
 
 @layer components {
-  /* Glassmorphism surface — the navbar/topbar treatment from Desing.md. */
+  /* Internal luminescence card/surface treatment from Desing.md */
+  .surface-card {
+    background-color: #1e1e1e;
+    border: 1px solid #3f3f3f;
+    border-radius: 12px;
+    box-shadow: rgba(255, 255, 255, 0.05) 0px 0px 0px 1px inset;
+  }
+
   .glass {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(30, 30, 30, 0.82);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid #3f3f3f;
+    box-shadow: rgba(255, 255, 255, 0.05) 0px 0px 0px 1px inset;
   }
 
   .shimmer {
     background-image: linear-gradient(
       90deg,
-      rgba(255, 255, 255, 0.04) 0%,
-      rgba(255, 255, 255, 0.1) 50%,
-      rgba(255, 255, 255, 0.04) 100%
+      rgba(255, 255, 255, 0.02) 0%,
+      rgba(255, 255, 255, 0.07) 50%,
+      rgba(255, 255, 255, 0.02) 100%
     );
     background-size: 200% 100%;
     @apply animate-shimmer;
   }
 
-  /* Markdown rendering for wiki pages and chat answers. Hand-rolled rather than
-     pulling the typography plugin, so every rule traces back to Desing.md. */
+  /* Markdown rendering for wiki pages and chat answers. Hand-rolled per Desing.md */
   .md {
-    @apply text-muted text-body;
+    @apply text-bright text-body;
   }
   .md > * + * {
     @apply mt-4;
   }
   .md h1 {
-    @apply text-h1 text-ink mt-10 mb-2 first:mt-0;
+    @apply text-h1 text-bright font-semibold mt-10 mb-2 first:mt-0;
   }
   .md h2 {
-    @apply text-h2 text-ink mt-8 mb-1;
+    @apply text-h2 text-bright font-semibold mt-8 mb-1;
   }
   .md h3 {
-    @apply text-ink text-body font-semibold mt-6;
+    @apply text-bright text-body font-semibold mt-6;
   }
   .md p {
-    @apply max-w-prose;
+    @apply max-w-prose text-bright leading-relaxed;
   }
   .md ul {
-    @apply list-disc pl-5 space-y-1.5 max-w-prose;
+    @apply list-disc pl-5 space-y-1.5 max-w-prose text-bright;
   }
   .md ol {
-    @apply list-decimal pl-5 space-y-1.5 max-w-prose;
+    @apply list-decimal pl-5 space-y-1.5 max-w-prose text-bright;
   }
   .md a {
-    @apply text-accent underline underline-offset-4 decoration-accent/40 hover:decoration-accent transition-colors;
+    @apply text-lavender underline underline-offset-4 decoration-lavender/40 hover:decoration-lavender transition-colors;
   }
   .md code {
-    @apply font-mono text-small text-ink bg-white/5 px-1.5 py-0.5 rounded;
+    @apply font-mono text-small text-bright bg-surface border border-graphite px-1.5 py-0.5 rounded;
   }
   .md pre {
-    @apply font-mono text-small bg-white/5 border border-line rounded p-4 overflow-x-auto;
+    @apply font-mono text-small bg-surface border border-graphite rounded-lg p-4 overflow-x-auto shadow-subtle;
   }
   .md pre code {
-    @apply bg-transparent p-0;
+    @apply bg-transparent border-0 p-0;
   }
   .md blockquote {
-    @apply border-l-2 border-accent/50 pl-4 italic;
+    @apply border-l-2 border-amethyst pl-4 italic text-medium;
   }
   .md table {
     @apply w-full text-small border-collapse;
   }
   .md th {
-    @apply text-ink text-left font-medium border-b border-line py-2 pr-4;
+    @apply text-bright text-left font-medium border-b border-graphite py-2 pr-4;
   }
   .md td {
-    @apply border-b border-line/60 py-2 pr-4 align-top;
+    @apply border-b border-graphite/60 py-2 pr-4 align-top text-medium;
   }
   .md hr {
-    @apply border-line my-8;
+    @apply border-graphite my-8;
   }
 }

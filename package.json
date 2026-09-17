@@ -7,7 +7,9 @@
     "build": "next build",
     "postbuild": "node scripts/postbuild.mjs",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "check:pipeline": "node scripts/check-pipeline.mjs",
+    "check:lint": "node scripts/check-lint.mjs"
   },
   "dependencies": {
     "@types/d3-force": "^3.0.10",

@@ -32,11 +32,11 @@ interface Link {
 }
 
 const COLOURS: Record<GraphNode['kind'], string> = {
-  entities: '#3B82F6', // accent
-  concepts: '#22C55E', // success
-  comparisons: '#9CA3AF', // muted
-  queries: '#FFFFFF', // ink
-  missing: '#EF4444', // danger — linked but never written
+  entities: '#a78bfa', // lavender
+  concepts: '#4ade80', // success green
+  comparisons: '#bcbcbc', // medium gray
+  queries: '#eeeeee', // bright gray
+  missing: '#f87171', // error red — linked but never written
 };
 
 const LEGEND: { kind: GraphNode['kind']; label: string }[] = [
@@ -163,7 +163,7 @@ export function GraphView({ graph, cluster }: { graph: Graph; cluster: string })
         </Button>
       </div>
 
-      <div ref={wrapRef} className="overflow-hidden rounded border border-line bg-elevated">
+      <div ref={wrapRef} className="overflow-hidden rounded-xl border border-graphite bg-surface shadow-subtle">
         <svg
           width="100%"
           viewBox={`0 0 ${size.width} ${size.height}`}
@@ -182,8 +182,8 @@ export function GraphView({ graph, cluster }: { graph: Graph; cluster: string })
                   y1={link.source.y ?? 0}
                   x2={link.target.x ?? 0}
                   y2={link.target.y ?? 0}
-                  stroke={broken ? '#EF4444' : '#FFFFFF'}
-                  strokeOpacity={dim ? 0.05 : broken ? 0.35 : 0.16}
+                  stroke={broken ? '#f87171' : '#ffffff'}
+                  strokeOpacity={dim ? 0.05 : broken ? 0.4 : 0.16}
                   strokeWidth={1}
                   strokeDasharray={broken ? '3 3' : undefined}
                 />
@@ -220,7 +220,7 @@ export function GraphView({ graph, cluster }: { graph: Graph; cluster: string })
                     y={r + 14}
                     textAnchor="middle"
                     className="pointer-events-none fill-current text-[11px]"
-                    style={{ fill: hovered === node.id ? '#FFFFFF' : '#9CA3AF' }}
+                    style={{ fill: hovered === node.id ? '#ffffff' : '#bcbcbc' }}
                   >
                     {node.label.length > 22 ? node.label.slice(0, 21) + '…' : node.label}
                   </text>
@@ -243,7 +243,7 @@ export function GraphView({ graph, cluster }: { graph: Graph; cluster: string })
       </div>
 
       {graph.orphans.length > 0 && (
-        <p className="mt-3 max-w-prose text-small text-muted/70">
+        <p className="mt-3 max-w-prose text-small text-medium">
           A page nothing links to is usually a curation miss — the agent wrote it but never
           connected it to the rest of the wiki. Worth reading before the next ingest builds on it.
         </p>

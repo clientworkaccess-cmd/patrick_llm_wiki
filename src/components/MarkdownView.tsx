@@ -33,7 +33,7 @@ export function MarkdownView({
             if (target.includes('?missing=')) {
               return (
                 <span
-                  className="cursor-help border-b border-dashed border-danger/50 text-danger/80"
+                  className="cursor-help border-b border-dashed border-error/60 text-error"
                   title="This page is linked but does not exist yet"
                 >
                   {children}
@@ -43,7 +43,10 @@ export function MarkdownView({
 
             if (target.startsWith('/')) {
               return (
-                <Link href={target} className="text-accent underline underline-offset-4">
+                <Link
+                  href={target}
+                  className="text-lavender underline underline-offset-4 decoration-lavender/40 transition-colors hover:decoration-lavender"
+                >
                   {children}
                 </Link>
               );
@@ -52,14 +55,20 @@ export function MarkdownView({
             // External. Never let an ingested document open a tab with a live
             // opener reference back into the app.
             return (
-              <a href={target} target="_blank" rel="noopener noreferrer nofollow" {...rest}>
+              <a
+                href={target}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className="text-lavender underline underline-offset-4 decoration-lavender/40 transition-colors hover:decoration-lavender"
+                {...rest}
+              >
                 {children}
               </a>
             );
           },
           img() {
             // Images inside client documents are untrusted remote references.
-            return <span className="font-mono text-small text-muted/60">[image omitted]</span>;
+            return <span className="font-mono text-small text-muted">[image omitted]</span>;
           },
         }}
       >

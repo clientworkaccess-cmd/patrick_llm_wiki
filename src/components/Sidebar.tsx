@@ -26,7 +26,7 @@ export function Sidebar({
   const [open, setOpen] = useState(false);
 
   const nav = (
-    <nav className="space-y-7">
+    <nav className="space-y-6">
       <SidebarLink
         href={`/c/${cluster}`}
         icon={BookOpen}
@@ -40,8 +40,8 @@ export function Sidebar({
         if (refs.length === 0) return null;
         return (
           <div key={dir}>
-            <h3 className="mb-2.5 flex items-center gap-2 px-3 text-small font-medium uppercase tracking-[0.12em] text-muted/60">
-              <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+            <h3 className="mb-2 flex items-center gap-2 px-3 text-caption font-medium uppercase tracking-[0.1em] text-muted">
+              <Icon className="h-3.5 w-3.5 text-lavender" strokeWidth={1.75} />
               {label}
             </h3>
             <ul className="space-y-0.5">
@@ -64,24 +64,24 @@ export function Sidebar({
 
   return (
     <>
-      {/* Mobile trigger — glassmorphism, matching the topbar treatment. */}
+      {/* Mobile trigger — internal luminescence matching the topbar */}
       <button
         onClick={() => setOpen(true)}
-        className="glass fixed bottom-5 left-5 z-overlay flex h-11 w-11 items-center justify-center rounded-lg text-ink lg:hidden"
+        className="glass fixed bottom-5 left-5 z-overlay flex h-11 w-11 items-center justify-center rounded-lg border border-graphite text-bright shadow-subtle lg:hidden"
         aria-label="Open page list"
       >
         <Menu className="h-5 w-5" strokeWidth={1.75} />
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-overlay bg-base/80 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-overlay bg-abyss/85 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)}>
           <aside
-            className="h-full w-[min(20rem,85vw)] overflow-y-auto border-r border-line bg-elevated p-5"
+            className="h-full w-[min(20rem,85vw)] overflow-y-auto border-r border-graphite bg-surface p-5 shadow-subtle"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => setOpen(false)}
-              className="mb-6 flex h-9 w-9 items-center justify-center rounded text-muted hover:text-ink"
+              className="mb-6 flex h-9 w-9 items-center justify-center rounded-lg text-medium hover:text-bright"
               aria-label="Close page list"
             >
               <X className="h-5 w-5" strokeWidth={1.75} />
@@ -116,15 +116,15 @@ function SidebarLink({
       href={href}
       onClick={onNavigate}
       className={cx(
-        'flex items-center gap-2 rounded px-3 py-1.5 text-small transition-colors',
-        // Active item carries the accent indicator and weight 500, per the spec.
+        'flex items-center gap-2 rounded-lg px-3 py-1.5 text-body-sm transition-colors',
         active
-          ? 'bg-accent/10 font-medium text-ink shadow-[inset_2px_0_0_0_#3B82F6]'
-          : 'text-muted hover:bg-white/5 hover:text-ink',
+          ? 'bg-tag-bg font-medium text-lavender shadow-[inset_2px_0_0_0_#7c3aed]'
+          : 'text-medium hover:bg-white/[0.04] hover:text-bright',
       )}
     >
-      {Icon && <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />}
+      {Icon && <Icon className="h-4 w-4 shrink-0 text-lavender" strokeWidth={1.75} />}
       <span className="truncate">{label}</span>
     </Link>
   );
 }
+
